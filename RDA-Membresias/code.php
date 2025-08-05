@@ -8,12 +8,6 @@
  * Author URI: https://robodacta-steam.mx
  * License: GPL2
  */
- add_action('all', function($hook_name = null) {
-    if (!is_admin()) return; // Opcional: solo en admin
-    if (strpos($_SERVER['REQUEST_URI'], 'memberdash') !== false) { // Solo cuando estés en páginas de memberdash
-        error_log('[HOOK] Acción disparada: ' . current_filter());
-    }
-});
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////Hook codigo para miembro estudiante
@@ -85,102 +79,107 @@ function rd_generar_nuevo_codigo_estudiante() {
     return $codigo;
 }
 
-////////////////////////////////////////////Desactivacion/Eliminacion
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////Limpieza y cancelacion de membresias Estudiante/Colegio.
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+// Limpieza de membresía "Estudiante"
+if (!wp_next_scheduled('robodacta_cron_cleanup_24218')) {
+    wp_schedule_single_event(time() + 60, 'robodacta_cron_cleanup_24218');
+}
 
-add_action('ms_model_member_cancel_membership', function($membership_id, $member) {
-    error_log("[MemberDash] El usuario {$member->id} canceló la membresía $membership_id.");
-    // Aquí tu código: notificación, actualizar CRM, etc.
-}, 10, 2);
+add_action('robodacta_cron_cleanup_24218', 'robodacta_clean_membership_24218');
 
+function robodacta_clean_membership_24218() {
+    error_log("⏰ [CRON 24218] Iniciando limpieza de membresías desactivadas...");
 
-add_action('ms_model_membership_drop_membership', function($subscription, $member) {
-    // NOTA: A veces el primer argumento puede ser $subscription (relación), otras veces es solo el membership_id
-    if (is_object($subscription) && property_exists($subscription, 'membership_id')) {
-        $membership_id = $subscription->membership_id;
-    } else {
-        $membership_id = $subscription;
+    $membership_id = 24218;
+    $course_ids = array(25306, 19476, 7363, 5957, 5624, 5619, 5613); // Los cursos que quieras
+
+    $users = get_users([
+        'meta_key' => 'ms_subscriptions',
+        'meta_compare' => 'EXISTS'
+    ]);
+
+    foreach ($users as $user) {
+        $user_id = $user->ID;
+        $subscriptions = get_user_meta($user_id, 'ms_subscriptions', true);
+
+        if (!is_array($subscriptions)) continue;
+
+        foreach ($subscriptions as $sub) {
+            if (is_object($sub) && isset($sub->membership_id, $sub->status) && $sub->membership_id == $membership_id && $sub->status === 'deactivated') {
+                foreach ($course_ids as $course_id) {
+                    ld_update_course_access($user_id, $course_id, true);
+                    delete_user_meta($user_id, 'course_' . $course_id . '_access_from');
+                    delete_user_meta($user_id, 'learndash_course_' . $course_id . '_enrolled_at');
+                }
+                global $wpdb;
+                $table =  $wpdb->prefix . 'rd_membresias';//Prefijo
+                $wpdb->update($table, ['status' => 'removido'], [
+                    'user_id' => $user_id
+                ]);
+
+                error_log("🟢 [CRON $membership_id] Status actualizado a removido en rd_membresias para usuario $user_id");
+
+                error_log("✅ [CRON 24218] Accesos removidos de membresía estudiante para usuario $user_id");
+            }
+        }
     }
-    error_log("[MemberDash] El usuario {$member->id} DESACTIVÓ la membresía $membership_id.");
-    // Aquí tu lógica: baja, email, update externo...
-}, 10, 2);
+    error_log("✅ [CRON 24218] Limpieza completada.");
+}
+// Limpieza de membresía "Colegio"
+// Funcion limpieza de membresia Colegio
+if (!wp_next_scheduled('robodacta_cron_cleanup_7694')) {
+    wp_schedule_single_event(time() + 120, 'robodacta_cron_cleanup_7694');
+}
 
+add_action('robodacta_cron_cleanup_7694', 'robodacta_clean_membership_7694');
 
-
-/*
-//detectar cambios memberdash drop/cancel
-add_action('ms_model_membership_drop_membership', function($a, $b) {
-    error_log('Drop Membership Hook --> '.print_r(func_get_args(),true));
-}, 10, 2);
-
-add_action('ms_model_membership_cancel_membership', function($membership_id, $member_obj) {
-    error_log('Cancel Membership Hook: membership_id='.$membership_id.' user_id='.$member_obj->id);
-}, 10, 2);
-
-
-//Desactivar y cancelar membresias junto con licencia 
-// Hook para quitar la licencia cuando se desactiva/cancela membresía
-add_action('ms_model_membership_drop_membership', function($param1, $param2) {
-    // Averigua cuál parámetro es el member_obj, dependiendo cómo llega en tu caso real
-    $user_id = null;
-    if (is_object($param1) && property_exists($param1, 'user_id')) {
-        $user_id = $param1->user_id;
-    } elseif (is_object($param2) && property_exists($param2, 'id')) {
-        $user_id = $param2->id;
-    }
-
-    if (!$user_id) return;
-    global $wpdb;
-    // Busca el código asignado
-    $codigo = $wpdb->get_var($wpdb->prepare(
-        "SELECT codigo FROM wp89_rd_membresias WHERE user_id=%d AND status='asignado' LIMIT 1", $user_id
-    ));
-    if ($codigo) {
-        $wpdb->update('wp89_rd_membresias', [
-            'status' => 'libre',
-            'user_id' => null,
-            'fecha_asignacion' => null
-        ], [
-            'codigo' => $codigo
-        ]);
-        // Limpia el user_meta
-        delete_user_meta($user_id, 'rd_codigo_membresia');
-        error_log("✔️ Licencia $codigo desasignada de user_id=$user_id");
-    }
-}, 10, 2);
-
-// Lo mismo puedes hacer con el hook cancel_membership si lo necesitas.
-
-
-// Función para desvincular licencia con más logs
-function rd_desvincula_membresia_codigo($user_id, $origen=''){
+function robodacta_clean_membership_7694() {
     global $wpdb;
     $table = $wpdb->prefix . 'rd_membresias';
-    $codigo = $wpdb->get_var($wpdb->prepare(
-        "SELECT codigo FROM $table WHERE user_id = %d AND status = 'asignado' LIMIT 1", $user_id
-    ));
-    error_log("[DEBUG] Desvinculando licencia. Origen: $origen | user_id: $user_id | codigo: $codigo");
-    if ($codigo) {
-        $wpdb->update($table, [
-            'status' => 'libre',
-            'user_id' => null,
-            'fecha_asignacion' => null
-        ], [
-            'codigo' => $codigo
-        ]);
-        error_log("[DEBUG] Licencia $codigo liberada en la BD.");
-    } else {
-        error_log("[DEBUG] No se encontró licencia asignada para user_id=$user_id.");
+
+    error_log("⏰ [CRON 7694] Iniciando limpieza de membresías Colegio desactivadas...");
+
+    $membership_id = 7694;
+    $course_ids = array(25306, 19476, 7363, 5957, 5624, 5619, 5613);
+
+    $users = get_users([
+        'meta_key' => 'ms_subscriptions',
+        'meta_compare' => 'EXISTS'
+    ]);
+
+    foreach ($users as $user) {
+        $user_id = $user->ID;
+        $subscriptions = get_user_meta($user_id, 'ms_subscriptions', true);
+
+        if (!is_array($subscriptions)) continue;
+
+        foreach ($subscriptions as $sub) {
+            if (is_object($sub) && isset($sub->membership_id, $sub->status) && $sub->membership_id == $membership_id && $sub->status === 'deactivated') {
+                // Remover acceso a los cursos
+                foreach ($course_ids as $course_id) {
+                    ld_update_course_access($user_id, $course_id, true);
+                    delete_user_meta($user_id, 'course_' . $course_id . '_access_from');
+                    delete_user_meta($user_id, 'learndash_course_' . $course_id . '_enrolled_at');
+                }
+
+                // Cambiar status de la membresía en la tabla personalizada
+                $codigo = get_user_meta($user_id, 'rd_codigo_membresia', true);
+                if ($codigo) {
+                    $wpdb->update($table, ['status' => 'removido'], [
+                        'user_id' => $user_id,
+                        'codigo' => $codigo
+                    ]);
+                    error_log("✅ [CRON 7694] Status removido en tabla rd_membresias para usuario $user_id y código $codigo");
+                }
+                error_log("✅ [CRON 7694] Accesos removidos de membresía Colegio para usuario $user_id");
+            }
+        }
     }
-    // Borra el user_meta
-    delete_user_meta($user_id, 'rd_codigo_membresia');
-    error_log("[DEBUG] user_meta rd_codigo_membresia eliminado para user_id=$user_id.");
-}*/
 
-
-
-
-
-
+    error_log("✅ [CRON 7694] Limpieza completada.");
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////Registrar Escuelas.
@@ -309,7 +308,7 @@ add_shortcode('rd_generar_codigos_membresia', function(){
             }
         }else{
             let anio_es = document.getElementById('anio_es').value;
-            // AquÃ­ podrÃ­as agregar un ID largo correlativo si lo necesitas.
+            // Aqui podras agregar un ID largo correlativo si lo necesitas.
             codigos.push(`ES${anio_es}`);
         }
         let html = '<h4>CÃ³digos generados:</h4><textarea style="width:98%;height:180px;">' + codigos.join('\n') + '</textarea>';
