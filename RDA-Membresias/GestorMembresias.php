@@ -91,44 +91,107 @@ if (!wp_next_scheduled('robodacta_cron_cleanup_24218')) {
 
 add_action('robodacta_cron_cleanup_24218', 'robodacta_clean_membership_24218');
 
+/** ─────────────────────────────
+ *  CRON limpieza membresía: ESTUDIANTE (ID 24218)
+ *  ─────────────────────────────
+ */
+
+// (Opción A) dispare una sola vez al minuto:
+if ( ! wp_next_scheduled('robodacta_cron_cleanup_24218') ) {
+    wp_schedule_single_event( time() + 60, 'robodacta_cron_cleanup_24218' );
+}
+
+add_action('robodacta_cron_cleanup_24218', 'robodacta_clean_membership_24218');
+
 function robodacta_clean_membership_24218() {
-    error_log("⏰ [CRON 24218] Iniciando limpieza de membresías desactivadas...");
+    global $wpdb;
+    $table = $wpdb->prefix . 'rd_membresias';
+
+    error_log("⏰ [CRON 24218] Iniciando limpieza de membresías Estudiante desactivadas...");
 
     $membership_id = 24218;
-    $course_ids = array(25306, 19476, 7363, 5957, 5624, 5619, 5613); // Los cursos que quieras
+    // Ajusta la lista si Estudiante tiene otros cursos
+    $course_ids = array(25306, 19476, 7363, 5957, 5624, 5619, 5613);
 
+    // Busca usuarios que tengan ms_subscriptions
     $users = get_users([
-        'meta_key' => 'ms_subscriptions',
-        'meta_compare' => 'EXISTS'
+        'meta_key'     => 'ms_subscriptions',
+        'meta_compare' => 'EXISTS',
+        'fields'       => array('ID')
     ]);
 
     foreach ($users as $user) {
-        $user_id = $user->ID;
+        $user_id = (int) $user->ID;
         $subscriptions = get_user_meta($user_id, 'ms_subscriptions', true);
-
-        if (!is_array($subscriptions)) continue;
+        if ( ! is_array($subscriptions) ) { continue; }
 
         foreach ($subscriptions as $sub) {
-            if (is_object($sub) && isset($sub->membership_id, $sub->status) && $sub->membership_id == $membership_id && $sub->status === 'deactivated') {
-                foreach ($course_ids as $course_id) {
-                    ld_update_course_access($user_id, $course_id, true);
-                    delete_user_meta($user_id, 'course_' . $course_id . '_access_from');
-                    delete_user_meta($user_id, 'learndash_course_' . $course_id . '_enrolled_at');
-                }
-                global $wpdb;
-                $table =  $wpdb->prefix . 'rd_membresias';//Prefijo
-                $wpdb->update($table, ['status' => 'removido'], [
-                    'user_id' => $user_id
-                ]);
+            if ( ! is_object($sub) || ! isset($sub->membership_id, $sub->status) ) { continue; }
+            if ( (int)$sub->membership_id !== $membership_id || $sub->status !== 'deactivated' ) { continue; }
 
-                error_log("🟢 [CRON $membership_id] Status actualizado a removido en rd_membresias para usuario $user_id");
-
-                error_log("✅ [CRON 24218] Accesos removidos de membresía estudiante para usuario $user_id");
+            // 1) Remover accesos LearnDash
+            foreach ($course_ids as $course_id) {
+                ld_update_course_access($user_id, $course_id, true);
+                delete_user_meta($user_id, 'course_' . $course_id . '_access_from');
+                delete_user_meta($user_id, 'learndash_course_' . $course_id . '_enrolled_at');
             }
+
+            // 2) Identificar la licencia 'asignado' (en claro) del usuario
+            $row = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, codigo FROM $table 
+                 WHERE user_id = %d AND status = 'asignado' 
+                 ORDER BY fecha_asignacion DESC, id DESC 
+                 LIMIT 1",
+                $user_id
+            ));
+
+            // Fallback: intentar con el user_meta si existe
+            if ( ! $row ) {
+                $meta_code = get_user_meta($user_id, 'rd_codigo_membresia', true);
+                if ($meta_code) {
+                    // Intentar desenmascarar si viniera enmascarada en el meta
+                    $codigo_real = $meta_code;
+                    if ( function_exists('rd_desenmascarar_licencia') ) {
+                        $posible = rd_desenmascarar_licencia( str_replace('-', '', $meta_code) );
+                        if ($posible) { $codigo_real = $posible; }
+                    }
+                    $row = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id, codigo FROM $table 
+                         WHERE user_id = %d AND codigo = %s 
+                         LIMIT 1",
+                        $user_id, $codigo_real
+                    ));
+                }
+            }
+
+            if ($row) {
+                // 3) Actualizar por ID a 'removido'
+                $updated = $wpdb->update(
+                    $table,
+                    array('status' => 'removido'),
+                    array('id' => (int)$row->id)
+                );
+
+                if ($updated === false) {
+                    error_log("❌ [CRON 24218] Error SQL al actualizar: " . $wpdb->last_error);
+                } elseif ($updated === 0) {
+                    error_log("⚠️ [CRON 24218] 0 filas afectadas para usuario $user_id (codigo={$row->codigo}).");
+                } else {
+                    error_log("✅ [CRON 24218] Status removido en rd_membresias para usuario $user_id y código {$row->codigo}");
+                    // Evita mostrar licencia fantasma en la interfaz
+                    delete_user_meta($user_id, 'rd_codigo_membresia');
+                }
+            } else {
+                error_log("⚠️ [CRON 24218] No se encontró licencia 'asignado' para usuario $user_id.");
+            }
+
+            error_log("✅ [CRON 24218] Accesos removidos de membresía Estudiante para usuario $user_id");
         }
     }
+
     error_log("✅ [CRON 24218] Limpieza completada.");
 }
+
 // Limpieza de membresía "Colegio"
 // Funcion limpieza de membresia Colegio
 if (!wp_next_scheduled('robodacta_cron_cleanup_7694')) {
@@ -154,34 +217,74 @@ function robodacta_clean_membership_7694() {
     foreach ($users as $user) {
         $user_id = $user->ID;
         $subscriptions = get_user_meta($user_id, 'ms_subscriptions', true);
-
         if (!is_array($subscriptions)) continue;
 
         foreach ($subscriptions as $sub) {
-            if (is_object($sub) && isset($sub->membership_id, $sub->status) && $sub->membership_id == $membership_id && $sub->status === 'deactivated') {
-                // Remover acceso a los cursos
-                foreach ($course_ids as $course_id) {
-                    ld_update_course_access($user_id, $course_id, true);
-                    delete_user_meta($user_id, 'course_' . $course_id . '_access_from');
-                    delete_user_meta($user_id, 'learndash_course_' . $course_id . '_enrolled_at');
-                }
+            if (!is_object($sub) || !isset($sub->membership_id, $sub->status)) continue;
+            if ($sub->membership_id != $membership_id || $sub->status !== 'deactivated') continue;
 
-                // Cambiar status de la membresía en la tabla personalizada
-                $codigo = get_user_meta($user_id, 'rd_codigo_membresia', true);
-                if ($codigo) {
-                    $wpdb->update($table, ['status' => 'removido'], [
-                        'user_id' => $user_id,
-                        'codigo' => $codigo
-                    ]);
-                    error_log("✅ [CRON 7694] Status removido en tabla rd_membresias para usuario $user_id y código $codigo");
-                }
-                error_log("✅ [CRON 7694] Accesos removidos de membresía Colegio para usuario $user_id");
+            // 1) Remover accesos LearnDash
+            foreach ($course_ids as $course_id) {
+                ld_update_course_access($user_id, $course_id, true);
+                delete_user_meta($user_id, 'course_' . $course_id . '_access_from');
+                delete_user_meta($user_id, 'learndash_course_' . $course_id . '_enrolled_at');
             }
+
+            // 2) Identificar la licencia realmente asignada al usuario (en claro)
+            // Busca la última licencia marcada como 'asignado'
+            $row = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, codigo FROM $table 
+                 WHERE user_id = %d AND status = 'asignado' 
+                 ORDER BY fecha_asignacion DESC, id DESC 
+                 LIMIT 1",
+                $user_id
+            ));
+
+            // Fallback: si quieres usar user_meta por compatibilidad
+            if (!$row) {
+                $meta_code = get_user_meta($user_id, 'rd_codigo_membresia', true);
+                if ($meta_code) {
+                    // Si el meta tiene código enmascarado, intenta desenmascarar
+                    $codigo_real = $meta_code;
+                    if (function_exists('rd_desenmascarar_licencia')) {
+                        $posible = rd_desenmascarar_licencia(str_replace('-', '', $meta_code));
+                        if ($posible) $codigo_real = $posible;
+                    }
+                    $row = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id, codigo FROM $table 
+                         WHERE user_id = %d AND codigo = %s 
+                         LIMIT 1",
+                        $user_id, $codigo_real
+                    ));
+                }
+            }
+
+            if ($row) {
+                // 3) Actualizar por ID (seguro) a 'removido'
+                $updated = $wpdb->update(
+                    $table,
+                    ['status' => 'removido'],
+                    ['id' => $row->id]
+                );
+
+                if ($updated) {
+                    error_log("✅ [CRON 7694] Status removido en tabla rd_membresias para usuario $user_id y código {$row->codigo}");
+                    // Limpia el meta para que la interfaz no muestre una licencia “fantasma”
+                    delete_user_meta($user_id, 'rd_codigo_membresia');
+                } else {
+                    error_log("⚠️ [CRON 7694] No se actualizó ninguna fila para usuario $user_id (codigo={$row->codigo}).");
+                }
+            } else {
+                error_log("⚠️ [CRON 7694] No se encontró licencia 'asignado' para usuario $user_id.");
+            }
+
+            error_log("✅ [CRON 7694] Accesos removidos de membresía Colegio para usuario $user_id");
         }
     }
 
     error_log("✅ [CRON 7694] Limpieza completada.");
 }
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////Registrar Escuelas.
@@ -291,7 +394,8 @@ function rd_guardar_codigos_membresia() {
 
     $guardados = [];
     foreach ($data as $row) {
-        error_log('[RDA] Intentando guardar: ' . print_r($row, true));
+        //Si si quiere mostrar array de codigo a guardar 
+        //error_log('[RDA] Intentando guardar: ' . print_r($row, true));
         $codigo       = sanitize_text_field($row['codigo']);
         $tipo_usuario = sanitize_text_field($row['tipo_usuario']);
         $anio         = sanitize_text_field($row['anio']);
@@ -547,52 +651,204 @@ add_shortcode('rd_generar_codigos_membresia', function(){
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 add_action('wp_ajax_rd_validar_y_asignar_licencia', 'rd_validar_y_asignar_licencia');
 function rd_validar_y_asignar_licencia() {
-    if (!is_user_logged_in()) wp_send_json_error('Debes iniciar sesión.');
+    if (!is_user_logged_in()) {
+        wp_send_json_error('Debes iniciar sesión.');
+    }
 
     global $wpdb;
     $user_id = get_current_user_id();
-    $table = $wpdb->prefix . 'rd_membresias';
-    $licencia = isset($_POST['licencia']) ? trim(sanitize_text_field($_POST['licencia'])) : '';
+    $table   = $wpdb->prefix . 'rd_membresias';
 
-    // Quitar guiones si la ponen con formato
-    $licencia = str_replace('-', '', $licencia);
+    // --- INPUT
+    $lic_user = isset($_POST['licencia']) ? trim(sanitize_text_field($_POST['licencia'])) : '';
+    if ($lic_user === '') {
+        wp_send_json_error('Ingresa tu licencia.');
+    }
+    $lic_normalizada = str_replace('-', '', $lic_user);
 
-    // 1. Verificar si el usuario YA tiene una licencia activa
+    error_log("[RDA alta] Inicio | user_id={$user_id} | input={$lic_user} | normalizada={$lic_normalizada}");
+
+    // --- ¿YA TIENE LICENCIA ACTIVA?
     $row_actual = $wpdb->get_row($wpdb->prepare(
-        "SELECT codigo FROM $table WHERE user_id = %d AND status = 'asignado'", $user_id
+        "SELECT codigo FROM $table WHERE user_id = %d AND status = 'asignado' LIMIT 1",
+        $user_id
+    ));
+    if ($row_actual) {
+        $mask = function_exists('rd_enmascarar_licencia')
+            ? strtoupper(rd_formatear_cod_con_guiones(rd_enmascarar_licencia($row_actual->codigo)))
+            : $row_actual->codigo;
+        error_log("[RDA alta] Ya tenía licencia activa: {$row_actual->codigo}");
+        wp_send_json_error('Tu cuenta ya tiene una licencia activa:<br><span style="font-size:1.1em;color:#004;">'.$mask.'</span>');
+    }
+
+    // --- BUSCAR LICENCIA EN CLARO
+    $row = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table WHERE codigo = %s LIMIT 1",
+        $lic_normalizada
     ));
 
-    if ($row_actual) {
-        // Enmascara para mostrarlo en el modal
-        $licencia_mask = function_exists('rd_enmascarar_licencia') ? strtoupper(rd_formatear_cod_con_guiones(rd_enmascarar_licencia($row_actual->codigo))) : $row_actual->codigo;
-        wp_send_json_error('Tu cuenta ya tiene una licencia activa:<br><span style="font-size:1.2em;color:#005;">'.$licencia_mask.'</span>');
-    }
-
-    // 2. Buscar la licencia ingresada
-    $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE codigo = %s", $licencia));
-    if (!$row && strlen($licencia) > 12 && function_exists('rd_desenmascarar_licencia')) {
-        $des = rd_desenmascarar_licencia($licencia);
-        if ($des) {
-            $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE codigo = %s", $des));
+    // Intentar DESENMASCARAR si no está
+    if (!$row && function_exists('rd_desenmascarar_licencia')) {
+        $posible_real = rd_desenmascarar_licencia($lic_normalizada);
+        error_log("[RDA alta] Desenmascarando… entrada={$lic_normalizada} => real={$posible_real}");
+        if ($posible_real) {
+            $row = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM $table WHERE codigo = %s LIMIT 1",
+                $posible_real
+            ));
+            if ($row) {
+                $lic_normalizada = $posible_real;
+            }
         }
     }
-    if (!$row) wp_send_json_error('La licencia no existe.');
 
-    // 3. Verificar que esté libre
+    if (!$row) {
+        error_log("[RDA alta] Licencia no existe en BD.");
+        wp_send_json_error('La licencia no existe.');
+    }
+
+    error_log("[RDA alta] Licencia encontrada id={$row->id} codigo={$row->codigo} status={$row->status} user_id_bd={$row->user_id}");
+
+    // --- DEBE ESTAR LIBRE
     if ($row->status !== 'libre' || !empty($row->user_id)) {
+        error_log("[RDA alta] Rechazada: status={$row->status} user_id_bd={$row->user_id}");
         wp_send_json_error('Esta licencia ya ha sido usada o está inactiva.');
     }
 
-    // 4. Asigna al usuario
-    $wpdb->update($table, [
-        'status' => 'asignado',
+    // --- ASIGNAR EN TU TABLA
+    $aff = $wpdb->update(
+        $table,
+        array(
+            'status'           => 'asignado',
+            'user_id'          => $user_id,
+            'fecha_asignacion' => current_time('mysql'),
+        ),
+        array('id' => (int)$row->id)
+    );
+    if ($aff === false) {
+        error_log('[RDA alta] Error SQL al actualizar licencia: ' . $wpdb->last_error);
+        wp_send_json_error('No se pudo asignar la licencia (error BD).');
+    }
+    if ($aff === 0) {
+        error_log("[RDA alta] 0 filas afectadas al asignar licencia id={$row->id} user={$user_id}");
+        wp_send_json_error('No se pudo asignar la licencia (no se actualizó).');
+    }
+    update_user_meta($user_id, 'rd_codigo_membresia', $lic_normalizada);
+    error_log("[RDA alta] Licencia asignada OK en BD propia | codigo={$lic_normalizada}");
+
+    // --- ASIGNAR MEMBRESÍA (MemberDash)
+    $membership_id_estudiante = 24218; // <-- AJUSTA
+    $membership_id_colegio    = 7694;  // <-- AJUSTA
+
+    $tipo_lic = strtoupper(substr($lic_normalizada, 0, 2));
+    $mem_to_assign = null;
+    if ($tipo_lic === 'ES') { $mem_to_assign = (int)$membership_id_estudiante; }
+    if ($tipo_lic === 'CG') { $mem_to_assign = (int)$membership_id_colegio; }
+
+    error_log("[RDA alta] Preparando asignación MemberDash | tipo={$tipo_lic} mem_id={$mem_to_assign}");
+
+    $md_classes = [
+        'MS_Model_Relationship' => class_exists('MS_Model_Relationship') ? 'sí' : 'no',
+        'MS_Factory'            => class_exists('MS_Factory') ? 'sí' : 'no',
+    ];
+    error_log('[RDA alta] Clases disponibles: ' . json_encode($md_classes));
+
+    $ok_membership = false;
+
+    // Fuerza que admin gateway sea considerado "pagado"
+    $force_paid_cb = function($paid, $subscription){ return true; };
+    add_filter('ms_model_relationship_admin_gateway_paid', $force_paid_cb, 99, 2);
+
+    // 1) Si ya existe suscripción para esa membresía, re-actívala
+    if (class_exists('MS_Model_Relationship') && method_exists('MS_Model_Relationship', 'get_subscription')) {
+        $existing = MS_Model_Relationship::get_subscription($user_id, $mem_to_assign);
+        if ($existing) {
+            $st = method_exists($existing, 'get_status') ? strtolower($existing->get_status()) : '(sin get_status)';
+            error_log("[RDA alta] Ya existe relación | status={$st}");
+            if (method_exists($existing, 'set_status')) {
+                $existing->set_status('active');
+                if (method_exists($existing, 'save')) { $existing->save(); }
+                $st2 = method_exists($existing, 'get_status') ? strtolower($existing->get_status()) : '(sin get_status)';
+                error_log("[RDA alta] Re-activada relación existente | nuevo_status={$st2}");
+                $ok_membership = ($st2 === 'active');
+            }
+        }
+    }
+
+    // 2) Crear relación si no había o no quedó activa
+    if (!$ok_membership && class_exists('MS_Model_Relationship')) {
+        $rel = MS_Model_Relationship::create_ms_relationship(
+            $mem_to_assign,
+            $user_id,
+            'admin',
+            '',
+            true
+        );
+        if ($rel) {
+            $st = method_exists($rel, 'get_status') ? strtolower($rel->get_status()) : '(sin get_status)';
+            error_log("[RDA alta] create_ms_relationship devuelto | status={$st}");
+            $ok_membership = ($st === 'active' || $st === 'trial');
+        } else {
+            error_log("[RDA alta] create_ms_relationship devolvió null");
+        }
+    }
+
+    // 3) Fallback a add_membership('admin')
+    if (!$ok_membership && class_exists('MS_Factory')) {
+        $member = MS_Factory::create('MS_Model_Member', $user_id);
+        if ($member && method_exists($member, 'add_membership')) {
+            $sub = $member->add_membership($mem_to_assign, 'admin');
+            $st = is_object($sub) && method_exists($sub, 'get_status')
+                ? strtolower($sub->get_status())
+                : '(sin get_status)';
+            error_log("[RDA alta] add_membership('admin') | status={$st}");
+            $ok_membership = ($st === 'active' || $st === 'trial');
+        } else {
+            error_log("[RDA alta] No se pudo instanciar MS_Model_Member o no tiene add_membership");
+        }
+    }
+
+    // Quita el filtro de "paid" forzado
+    remove_filter('ms_model_relationship_admin_gateway_paid', $force_paid_cb, 99);
+
+    // 4) Verificación final preguntando al Member object
+    if (class_exists('MS_Factory')) {
+        $member_v = MS_Factory::create('MS_Model_Member', $user_id);
+        if ($member_v) {
+            if (method_exists($member_v, 'get_subscription')) {
+                $final = $member_v->get_subscription($mem_to_assign);
+                $fst = (is_object($final) && method_exists($final, 'get_status')) ? strtolower($final->get_status()) : '(sin get_status)';
+                error_log("[RDA alta] Verificación final get_subscription | status={$fst}");
+                $ok_membership = $ok_membership || ($fst === 'active' || $fst === 'trial');
+            } elseif (method_exists($member_v, 'has_membership')) {
+                $has = $member_v->has_membership($mem_to_assign);
+                error_log("[RDA alta] Verificación final has_membership | has=" . ($has ? '1' : '0'));
+                $ok_membership = $ok_membership || $has;
+            }
+        }
+    }
+
+    if (!$ok_membership) {
+        error_log("[RDA alta] ❌ NO se pudo confirmar membresía activa para user={$user_id} mem_id={$mem_to_assign}");
+        // Decide si revertir la licencia o no:
+        // $wpdb->update($table, ['status'=>'libre','user_id'=>null,'fecha_asignacion'=>null], ['id'=>$row->id]);
+        // delete_user_meta($user_id, 'rd_codigo_membresia');
+        // wp_send_json_error('No se pudo asignar la membresía.');
+        // Por ahora seguimos exitoso pero con warning en log.
+    } else {
+        error_log("[RDA alta] ✅ Membresía OK para user={$user_id} mem_id={$mem_to_assign}");
+    }
+
+    $mask_ok = function_exists('rd_enmascarar_licencia')
+        ? strtoupper(rd_formatear_cod_con_guiones(rd_enmascarar_licencia($lic_normalizada)))
+        : $lic_normalizada;
+
+    wp_send_json_success([
+        'mask'    => $mask_ok,
+        'tipo'    => $tipo_lic,
         'user_id' => $user_id,
-        'fecha_asignacion' => current_time('mysql')
-    ], [
-        'id' => $row->id
+        'msg'     => $ok_membership ? '¡Licencia y membresía asignadas!' : 'Licencia asignada. Verifica tu membresía en unos segundos.',
     ]);
-
-    update_user_meta($user_id, 'rd_codigo_membresia', $licencia);
-
-    wp_send_json_success(true);
 }
+
+
