@@ -6,16 +6,22 @@ add_shortcode('rd_validar_licencia', function(){
     $user_id = get_current_user_id();
 
     if ($user_id) {
-        $licencia = get_user_meta($user_id, 'rd_codigo_membresia', true);
+        global $wpdb;
+        $table = $wpdb->prefix . 'rd_membresias';
+        // Busca solo la licencia con status 'asignado'
+        $licencia = $wpdb->get_var($wpdb->prepare(
+            "SELECT codigo FROM $table WHERE user_id = %d AND status = 'asignado' LIMIT 1", $user_id
+        ));
         if ($licencia && function_exists('rd_enmascarar_licencia')) {
             $licencia_mask = strtoupper(rd_formatear_cod_con_guiones(rd_enmascarar_licencia($licencia)));
+            $tiene_licencia = true;
         }
     }
 
     ob_start(); ?>
     <div id="licencia-ui-container" style="max-width:400px;margin:2em auto;padding:28px 24px;border-radius:18px;background:#fafcff;box-shadow:0 1px 6px #2e467b22;text-align:center;">
-        <h3 style="color:#2e467b;">Vincular Licencia</h3>
-        <?php if ($licencia_mask): ?>
+        <h3 style="color:#2e467b;">Canjear C&oacute;digo</h3>
+        <?php if ($tiene_licencia): ?>
             <div style="background:#e9fff5; color:#228b22; border-radius:8px; padding:14px; margin-bottom:20px;">
                 <b>Tu licencia activa:</b><br>
                 <span style="font-size:1.2em;letter-spacing:2px;"><?php echo esc_html($licencia_mask); ?></span>
