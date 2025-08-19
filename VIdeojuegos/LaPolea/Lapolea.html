@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Poleas: fija, móvil y compuesta</title>
+<style>
+  :root{
+    --bg:#f6f8fb; --panel:#fff; --ink:#0f172a; --muted:#64748b; --line:#e6ebf2;
+    --brand:#3b82f6; --brand-2:#8b5cf6; --ok:#059669; --err:#dc2626;
+    --rope:#caa85a; --beam:#5b3a1a; --gold:#c9a24d; --gold-2:#e0c073;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#f8fafc, #eef2ff 60%);font-family:system-ui,ui-sans-serif,Segoe UI,Roboto}
+  .wrap{max-width:560px;margin:20px auto;padding:0 12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgba(2,6,23,.08);overflow:hidden}
+  .topbar{display:flex;gap:8px;justify-content:center;padding:10px 10px 6px}
+  .btn{appearance:none;border:1px solid var(--line);background:#fff;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700;color:#0f172a;transition:.2s}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn[aria-pressed="true"]{background:linear-gradient(180deg,#eef2ff,#e0e7ff);border-color:#c7d2fe}
+  .btn.ghost{background:#f8fafc}
+  .btn.primary{background:linear-gradient(180deg,#60a5fa,#6366f1);border-color:#60a5fa;color:white;box-shadow:0 6px 14px rgba(99,102,241,.25)}
+  .btn.primary:hover{filter:brightness(1.05)}
+  svg{width:100%;height:auto;display:block}
+
+  /* Escena / dibujo */
+  .beam{fill:var(--beam)}
+  .pulley-face{fill:var(--gold);stroke:#856f2a;stroke-width:2}
+  .pulley-groove{fill:var(--gold-2)}
+  .hook{fill:#333}
+  .strap{stroke:#333;stroke-width:4;stroke-linecap:round}
+  .rope{stroke:var(--rope);stroke-width:6;stroke-linecap:round;stroke-linejoin:round;fill:none}
+  .weight{fill:#475569;stroke:#1f2937;stroke-width:2}
+  .ring{fill:none;stroke:#1f2937;stroke-width:3}
+  .label{font-weight:800;fill:#334155}
+  .hand-line{fill:#FCD1C6;stroke:#000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  .hidden{display:none}
+
+  /* UI de juego */
+  .game{margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 12px 14px}
+  .hud{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .badges{display:flex;gap:8px;align-items:center}
+  .badge{background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:4px 10px;font-weight:800;color:#1e3a8a}
+  .progress{flex:1;height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden}
+  .progress>span{display:block;height:100%;background:linear-gradient(90deg,#60a5fa,#22c55e);width:0%}
+
+  .q{margin:8px 0 10px;font-weight:700;color:var(--ink)}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .inp{padding:10px 12px;border:1px solid #d1d5db;border-radius:10px;min-width:180px;font-weight:700}
+  .feedback{min-height:22px;margin-top:8px;font-weight:800}
+  .feedback.ok{color:var(--ok)}
+  .feedback.err{color:var(--err);animation:shake .28s linear}
+  @keyframes shake{
+    20%{transform:translateX(-4px)} 40%{transform:translateX(4px)}
+    60%{transform:translateX(-3px)} 80%{transform:translateX(3px)} 100%{transform:none}
+  }
+
+  /* Modales */
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+  .modal.show{display:flex}
+  .card{max-width:680px;background:#fff;border-radius:16px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(15,23,42,.2);padding:18px 18px 16px}
+  .card h2{margin:0 0 6px;font-size:22px}
+  .card p{color:var(--muted);margin:6px 0}
+  .list{margin:6px 0 10px 18px;color:#334155}
+  .list li{margin:6px 0}
+  .center{display:flex;justify-content:center}
+
+  /* Confetti */
+  .confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .confetti i{position:absolute;width:10px;height:14px;opacity:.9;border-radius:2px;animation:fall 2.8s linear forwards}
+  @keyframes fall{
+    0%{transform:translateY(-20vh) rotate(0deg)}
+    100%{transform:translateY(110vh) rotate(720deg)}
+  }
+  .topbar{
+      display: none;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <button id="btnFixed"    class="btn" aria-pressed="true">Polea fija</button>
+    <button id="btnMobile"   class="btn" aria-pressed="false">Polea móvil</button>
+    <button id="btnCompound" class="btn" aria-pressed="false">Polea compuesta</button>
+  </div>
+
+  <div class="panel">
+    <!-- ========== ESCENA 1: FIJA (tus animaciones) ========== -->
+    <svg id="sceneFixed" viewBox="0 0 420 360" aria-label="Polea fija">
+      <rect class="beam" x="20" y="20" width="380" height="16" rx="3"/>
+      <g id="pulleyF">
+        <polygon class="hook" points="210,36 222,60 198,60"/>
+        <circle class="pulley-face"  cx="210" cy="100" r="28"/>
+        <circle class="pulley-groove" cx="210" cy="100" r="22"/>
+      </g>
+      <g id="weightF">
+        <circle class="ring" cx="190" cy="230" r="8"/>
+        <path class="weight" d="M180 238 L200 238 L210 280 L170 280 Z"/>
+      </g>
+      <g id="handF">
+        <path class="hand-line" d="M -25,14 q 6,24 22,22 h 22 q 12,0 20,-10 l 8,-10 q 6,-8 -2,-16 l 0,0" />
+        <rect class="hand-line" x="-26" y="-16" width="14" height="30" rx="6"/>
+        <rect class="hand-line" x="-10" y="-16" width="14" height="30" rx="6"/>
+        <rect class="hand-line" x="  6" y="-16" width="14" height="30" rx="6"/>
+        <rect class="hand-line" x=" 22" y="-16" width="14" height="30" rx="6"/>
+      </g>
+      <path id="ropeF" class="rope" d="M182,222 L182,100 A22 22 0 0 1 238 100 L238,214"/>
+      <text class="label" x="24" y="340">Polea fija (F = R)</text>
+    </svg>
+
+    <!-- ========== ESCENA 2: MÓVIL (tus animaciones) ========== -->
+    <svg id="sceneMobile" class="hidden" viewBox="0 0 420 360" aria-label="Polea móvil">
+      <rect class="beam" x="20" y="20" width="380" height="16" rx="3"/>
+      <polygon class="hook" points="86,36 98,60 74,60"/>
+      <g id="fixedPulleyM">
+        <polygon class="hook" points="300,36 312,60 288,60"/>
+        <circle class="pulley-face"  cx="300" cy="90" r="28"/>
+        <circle class="pulley-groove" cx="300" cy="90" r="22"/>
+      </g>
+      <g id="blockM">
+        <g id="movPulleyM">
+          <circle class="pulley-face"  cx="140" cy="170" r="28"/>
+          <circle class="pulley-groove" cx="140" cy="170" r="22"/>
+        </g>
+        <line class="strap" x1="140" y1="192" x2="140" y2="216"/>
+        <g id="weightM">
+          <circle class="ring" cx="140" cy="226" r="8"/>
+          <path class="weight" d="M125 234 L155 234 L168 286 L112 286 Z"/>
+        </g>
+      </g>
+      <g id="handM">
+        <path class="hand-line" d="M -25,14 q 6,24 22,22 h 22 q 12,0 20,-10 l 8,-10 q 6,-8 -2,-16 l 0,0" />
+        <rect class="hand-line" x="-26" y="-16" width="14" height="30" rx="6"/>
+        <rect class="hand-line" x="-10" y="-16" width="14" height="30" rx="6"/>
+        <rect class="hand-line" x="  6" y="-16" width="14" height="30" rx="6"/>
+        <rect class="hand-line" x=" 22" y="-16" width="14" height="30" rx="6"/>
+      </g>
+      <path id="ropeM" class="rope" d="M0,0"/>
+      <text class="label" x="24" y="340">Polea móvil (F = R/2)</text>
+    </svg>
+
+    <!-- ========== ESCENA 3: COMPUESTA (tus animaciones) ========== -->
+    <svg id="sceneCompound" class="hidden" viewBox="0 0 420 360" aria-label="Polea compuesta">
+      <rect class="beam" x="20" y="20" width="380" height="16" rx="3"/>
+      <polygon class="hook" points="56,36 68,60 44,60"/>
+      <g id="fixedLeft">
+        <polygon class="hook" points="190,36 202,60 178,60"/>
+        <circle class="pulley-face"  cx="190" cy="90" r="28"/>
+        <circle class="pulley-groove" cx="190" cy="90" r="22"/>
+      </g>
+      <g id="fixedRight">
+        <polygon class="hook" points="300,36 312,60 288,60"/>
+        <circle class="pulley-face"  cx="300" cy="90" r="28"/>
+        <circle class="pulley-groove" cx="300" cy="90" r="22"/>
+      </g>
+      <g id="blockC">
+        <g id="movLeft">
+          <circle class="pulley-face"  cx="150" cy="200" r="28"/>
+          <circle class="pulley-groove" cx="150" cy="200" r="22"/>
+        </g>
+        <g id="movRight">
+          <circle class="pulley-face"  cx="260" cy="200" r="28"/>
+          <circle class="pulley-groove" cx="260" cy="200" r="22"/>
+        </g>
+        <line class="strap" x1="150" y1="222" x2="150" y2="240"/>
+        <line class="strap" x1="260" y1="222" x2="260" y2="240"/>
+        <g>
+          <circle class="ring" cx="150" cy="250" r="8"/>
+          <circle class="ring" cx="260" cy="250" r="8"/>
+          <path class="weight" d="M110 258 L300 258 L320 300 L90 300 Z"/>
+        </g>
+      </g>
+      <g id="handC">
+        <path class="hand-line" d="M -25,14 q 6,24 22,22 h 22 q 12,0 20,-10 l 8,-10 q 6,-8 -2,-16 l 0,0" />
+        <rect class="hand-line" x="-26" y="-16" width="14" height="30" rx="6"/>
+        <rect class="hand-line" x="-10" y="-16" width="14" height="30" rx="6"/>
+        <rect class="hand-line" x="  6" y="-16" width="14" height="30" rx="6"/>
+        <rect class="hand-line" x=" 22" y="-16" width="14" height="30" rx="6"/>
+      </g>
+      <path id="ropeC" class="rope" d="M0,0"/>
+      <text class="label" x="24" y="340">Polea compuesta (F = R / 2n, n=2)</text>
+    </svg>
+  </div>
+
+  <!-- ===== UI del Juego ===== -->
+  <div id="game" class="game">
+    <div class="hud">
+      <div class="badges">
+        <span class="badge">Nivel <span id="lvNum">1</span>/3</span>
+        <span class="badge" id="score">Puntos: 0</span>
+      </div>
+      <div class="progress"><span id="progBar"></span></div>
+    </div>
+
+    <p id="question" class="q"></p>
+
+    <div class="controls">
+      <input id="answer" class="inp" placeholder="Tu respuesta en kg" inputmode="decimal">
+      <button id="checkBtn" class="btn primary">Comprobar</button>
+      <button id="nextBtn"  class="btn" disabled>Siguiente nivel</button>
+      <button id="hintBtn"  class="btn">Pista</button>
+      <button id="resetBtn" class="btn">Reiniciar</button>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Instrucciones ===== -->
+<div id="introModal" class="modal show">
+  <div class="card">
+    <h2>Bienvenid@ al juego de <span style="color:#1d4ed8">Poleas</span> 🧠</h2>
+    <p>Aprende y demuestra cuánto sabes sobre <strong>ventaja mecánica</strong> levantando cargas con sistemas de poleas.</p>
+    <ul class="list">
+      <li><b>Nivel 1 – Polea fija:</b> F = R (sin ventaja mecánica).</li>
+      <li><b>Nivel 2 – Móvil:</b> F = R / 2 (dos tramos de cuerda sostienen la carga).</li>
+      <li><b>Nivel 3 – Compuesta (2 móviles):</b> F = R / 4.</li>
+      <li>Responde si <b>R</b> es la masa de la pesa, obten el valor de <b>F</b> que es la fuerza empleada en <b>Kg</b> Se aceptan decimales y redondeos pequeños.</li>
+    </ul>
+    <div class="center" style="gap:10px">
+      <button id="startBtn" class="btn primary">Iniciar juego</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Victoria ===== -->
+<div id="winModal" class="modal">
+  <div class="card" style="position:relative">
+    <div class="confetti" id="confetti"></div>
+    <h2>¡Ganaste! 🏆</h2>
+    <p id="finalScore" style="font-weight:800;color:#065f46;margin:.5rem 0 1rem"></p>
+    <div class="center" style="gap:10px">
+      <button id="playAgainBtn" class="btn primary">Jugar de nuevo</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== ANIMACIONES (sin cambios) ===================== */
+function pingPong(t){ t=t%1; return t<0.5? t*2 : (1-(t-0.5)*2); }
+const V = {
+  sub:(a,b)=>({x:a.x-b.x,y:a.y-b.y}), add:(a,b)=>({x:a.x+b.x,y:a.y+b.y}),
+  mul:(a,s)=>({x:a.x*s,y:a.y*s}), len:(a)=>Math.hypot(a.x,a.y),
+  norm:(a)=>{const L=Math.hypot(a.x,a.y); return {x:a.x/L,y:a.y/L}},
+  perp:(a)=>({x:-a.y,y:a.x}), rot:(a,ang)=>({x:a.x*Math.cos(ang)-a.y*Math.sin(ang), y:a.x*Math.sin(ang)+a.y*Math.cos(ang)}),
+  ang:(a)=>Math.atan2(a.y,a.x)
+};
+function tangentFromPointToCircle(P, C, r, preferUpper=true){
+  const v=V.sub(P,C), d=V.len(v), u=V.norm(v);
+  const g=Math.acos(r/d);
+  const dir1=V.rot(u,+g), dir2=V.rot(u,-g);
+  const T1=V.add(C,V.mul(dir1,r)), T2=V.add(C,V.mul(dir2,r));
+  return preferUpper ? ((T1.y<T2.y)?T1:T2) : ((T1.y>T2.y)?T1:T2);
+}
+function outerTangentEqualR(C1,C2,r,preferUpper=true){
+  const u=V.norm(V.sub(C2,C1)), k=V.perp(u), s = preferUpper? +1 : -1;
+  return {T1:V.add(C1,V.mul(k,r*s)), T2:V.add(C2,V.mul(k,r*s))};
+}
+function innerTangentEqualR(C1,C2,r){
+  const u=V.norm(V.sub(C2,C1)), k=V.perp(u);
+  return { A1:V.add(C1,V.mul(k, r)), A2:V.add(C2,V.mul(k,-r)),
+           B1:V.add(C1,V.mul(k,-r)), B2:V.add(C2,V.mul(k, r)) };
+}
+function arcFlagsForHalf(C, A, B, want='bottom', clockwise=true){
+  const a1 = V.ang({x:A.x-C.x, y:A.y-C.y});
+  const a2 = V.ang({x:B.x-C.x, y:B.y-C.y});
+  let d = a2-a1; while(d<0) d+=Math.PI*2;
+  const sweep = clockwise ? 1:0;
+  const mid = a1 + d/2, isBottom0 = Math.sin(mid) > 0;
+  let largeArc = 0;
+  if((want==='bottom' && !isBottom0) || (want==='top' && isBottom0)) largeArc = 1;
+  return {largeArc,sweep};
+}
+
+/* Botones escenas */
+const btnFixed  = document.getElementById('btnFixed');
+const btnMobile = document.getElementById('btnMobile');
+const btnCompound = document.getElementById('btnCompound');
+const sceneFixed  = document.getElementById('sceneFixed');
+const sceneMobile = document.getElementById('sceneMobile');
+const sceneCompound = document.getElementById('sceneCompound');
+
+/* Escena 1: fija */
+const cfgF = { cx:210, cy:100, r:22, xL:188, xR:232, weightBaseY:238, handGripBaseY:214, lift:60 };
+const ropeF  = document.getElementById('ropeF');
+const gWF    = document.getElementById('weightF');
+const gHandF = document.getElementById('handF');
+function drawFixed(t0){
+  const t=(performance.now()-t0)/4000, p=pingPong(t);
+  const yW = cfgF.weightBaseY - cfgF.lift*p;
+  const yG = cfgF.handGripBaseY + cfgF.lift*p;
+  gWF.setAttribute('transform',`translate(0, ${yW-cfgF.weightBaseY})`);
+  gHandF.setAttribute('transform',`translate(${cfgF.xR}, ${yG+16}) rotate(-90)`);
+  const d=[`M ${cfgF.xL},${yW-8}`, `L ${cfgF.xL},${cfgF.cy}`, `A ${cfgF.r} ${cfgF.r} 0 0 1 ${cfgF.xR} ${cfgF.cy}`, `L ${cfgF.xR},${yG+16}`].join(' ');
+  ropeF.setAttribute('d', d);
+}
+
+/* Escena 2: móvil */
+const cfgM = { r:22, Cmov:{x:140,y:170}, Cfix:{x:300,y:90}, anchor:{x:74,y:60}, gripBaseY:150, gripTravel:90 };
+const blockM = document.getElementById('blockM');
+const ropeM  = document.getElementById('ropeM');
+const gHandM = document.getElementById('handM');
+function drawMobile(t0){
+  const t=(performance.now()-t0)/4000, p=pingPong(t);
+  const dGrip = cfgM.gripTravel*p;
+  const dBlock= -(cfgM.gripTravel/2)*p; // MA=2
+  const Cmov={x:cfgM.Cmov.x,y:cfgM.Cmov.y+dBlock}, Cfix={x:cfgM.Cfix.x,y:cfgM.Cfix.y}, r=cfgM.r;
+  blockM.setAttribute('transform',`translate(0, ${dBlock})`);
+  const handX=Cfix.x+r, handY=cfgM.gripBaseY+dGrip;
+  gHandM.setAttribute('transform',`translate(${handX}, ${handY+16}) rotate(-90)`);
+
+  const T_in_mov = tangentFromPointToCircle(cfgM.anchor, Cmov, r, false);
+  const kin = innerTangentEqualR(Cmov, Cfix, r);
+  let T_out_mov=kin.B1, T_in_fix=kin.B2;
+  if(!(T_out_mov.y>Cmov.y && T_in_fix.y<Cfix.y)){ T_out_mov=kin.A1; T_in_fix=kin.A2; }
+
+  const T_out_fix={x:Cfix.x+r, y:Cfix.y};
+  const flagsMov=arcFlagsForHalf(Cmov, T_in_mov, T_out_mov, 'bottom', true);
+  const flagsFix=arcFlagsForHalf(Cfix, T_in_fix, T_out_fix, 'top', true);
+
+  const dPath=[ `M ${cfgM.anchor.x},${cfgM.anchor.y}`,
+    `L ${T_in_mov.x.toFixed(2)},${T_in_mov.y.toFixed(2)}`,
+    `A ${r} ${r} 0 ${flagsMov.largeArc} ${flagsMov.sweep} ${T_out_mov.x.toFixed(2)} ${T_out_mov.y.toFixed(2)}`,
+    `L ${T_in_fix.x.toFixed(2)},${T_in_fix.y.toFixed(2)}`,
+    `A ${r} ${r} 0 ${flagsFix.largeArc} ${flagsFix.sweep} ${T_out_fix.x.toFixed(2)} ${T_out_fix.y.toFixed(2)}`,
+    `L ${handX.toFixed(2)},${(handY+16).toFixed(2)}`].join(' ');
+  ropeM.setAttribute('d', dPath);
+}
+
+/* Escena 3: compuesta */
+const ropeC  = document.getElementById('ropeC');
+const blockC = document.getElementById('blockC');
+const gHandC = document.getElementById('handC');
+const cfgC = {
+  r:22, CfixL:{x:190,y:90}, CfixR:{x:300,y:90}, CmovL:{x:150,y:200}, CmovR:{x:260,y:200},
+  anchor:{x:56,y:60}, gripBaseY:150, gripTravel:100
+};
+function drawCompound(t0){
+  const t=(performance.now()-t0)/4500, p=pingPong(t);
+  const dGrip = cfgC.gripTravel*p;
+  const dBlock= -(cfgC.gripTravel/4)*p; // MA=4
+  const r=cfgC.r;
+
+  const CmovL={x:cfgC.CmovL.x, y:cfgC.CmovL.y + dBlock};
+  const CmovR={x:cfgC.CmovR.x, y:cfgC.CmovR.y + dBlock};
+  const CfixL=cfgC.CfixL, CfixR=cfgC.CfixR;
+
+  blockC.setAttribute('transform',`translate(0, ${dBlock})`);
+
+  const handX = CfixR.x + r, handY = cfgC.gripBaseY + dGrip;
+  gHandC.setAttribute('transform',`translate(${handX}, ${handY+16}) rotate(-90)`);
+
+  const T1_in = tangentFromPointToCircle(cfgC.anchor, CmovL, r, false);
+
+  const kin1 = innerTangentEqualR(CmovL, CfixL, r);
+  let T1_out = kin1.B1, T2_in = kin1.B2;
+  if(!(T1_out.y>CmovL.y && T2_in.y<CfixL.y)){ T1_out=kin1.A1; T2_in=kin1.A2; }
+  const flagsMovL = arcFlagsForHalf(CmovL, T1_in, T1_out, 'bottom', true);
+
+  const kinMid = innerTangentEqualR(CfixL, CmovR, r);
+  let T2_out = kinMid.B1;
+  let T3_in  = kinMid.B2;
+  if (!(T2_out.y < CfixL.y && T3_in.y > CmovR.y && T3_in.x < CmovR.x)) {
+    T2_out = kinMid.A1; T3_in  = kinMid.A2;
+  }
+  const flagsFixL = arcFlagsForHalf(CfixL, T2_in, T2_out, 'top', ); /* (igual que tu código) */
+
+  const kin2 = innerTangentEqualR(CmovR, CfixR, r);
+  let T3_out = kin2.B1, T4_in = kin2.B2;
+  if(!(T3_out.y>CmovR.y && T4_in.y<CfixR.y)){ T3_out=kin2.A1; T4_in=kin2.A2; }
+  const flagsMovR = arcFlagsForHalf(CmovR, T3_in, T3_out, 'bottom', true);
+
+  const T4_out = {x:CfixR.x + r, y:CfixR.y};
+  const flagsFixR = arcFlagsForHalf(CfixR, T4_in, T4_out, 'top', true);
+
+  const dPath = [
+    `M ${cfgC.anchor.x},${cfgC.anchor.y}`,
+    `L ${T1_in.x.toFixed(2)},${T1_in.y.toFixed(2)}`,
+    `A ${r} ${r} 0 ${flagsMovL.largeArc} ${flagsMovL.sweep} ${T1_out.x.toFixed(2)} ${T1_out.y.toFixed(2)}`,
+    `L ${T2_in.x.toFixed(2)},${T2_in.y.toFixed(2)}`,
+    `A ${r} ${r} 0 ${flagsFixL.largeArc} ${flagsFixL.sweep} ${T2_out.x.toFixed(2)} ${T2_out.y.toFixed(2)}`,
+    `L ${T3_in.x.toFixed(2)},${T3_in.y.toFixed(2)}`,
+    `A ${r} ${r} 0 ${flagsMovR.largeArc} ${flagsMovR.sweep} ${T3_out.x.toFixed(2)} ${T3_out.y.toFixed(2)}`,
+    `L ${T4_in.x.toFixed(2)},${T4_in.y.toFixed(2)}`,
+    `A ${r} ${r} 0 ${flagsFixR.largeArc} ${flagsFixR.sweep} ${T4_out.x.toFixed(2)} ${T4_out.y.toFixed(2)}`,
+    `L ${handX.toFixed(2)},${(handY+16).toFixed(2)}`
+  ].join(' ');
+  ropeC.setAttribute('d', dPath);
+}
+
+/* Animación conmutada */
+let active='compound';
+let t0=performance.now();
+function loop(){
+  if(active==='fixed'    && !sceneFixed.classList.contains('hidden'))    drawFixed(t0);
+  if(active==='mobile'   && !sceneMobile.classList.contains('hidden'))   drawMobile(t0);
+  if(active==='compound' && !sceneCompound.classList.contains('hidden')) drawCompound(t0);
+  requestAnimationFrame(loop);
+}
+function setScene(name){
+  active=name; t0=performance.now();
+  btnFixed.setAttribute('aria-pressed', name==='fixed');
+  btnMobile.setAttribute('aria-pressed', name==='mobile');
+  btnCompound.setAttribute('aria-pressed', name==='compound');
+  sceneFixed.classList.toggle('hidden', name!=='fixed');
+  sceneMobile.classList.toggle('hidden', name!=='mobile');
+  sceneCompound.classList.toggle('hidden', name!=='compound');
+}
+btnFixed.addEventListener('click', ()=>setScene('fixed'));
+btnMobile.addEventListener('click', ()=>setScene('mobile'));
+btnCompound.addEventListener('click', ()=>setScene('compound'));
+setScene('compound'); loop();
+
+/* ===================== MODO JUEGO (UI + lógica) ===================== */
+const tabsEl = document.querySelector('.topbar');
+const levels = [
+  { scene: 'fixed',    label: 'Polea fija',      weight: 5,  ma: 1,  formula: 'F = R' },
+  { scene: 'mobile',   label: 'Polea móvil',     weight: 12, ma: 2,  formula: 'F = R / 2' },
+  { scene: 'compound', label: 'Polea compuesta', weight: 50, ma: 4,  formula: 'F = R / 4' }
+];
+const gameEls = {
+  lvNum:   document.getElementById('lvNum'),
+  score:   document.getElementById('score'),
+  q:       document.getElementById('question'),
+  ans:     document.getElementById('answer'),
+  check:   document.getElementById('checkBtn'),
+  next:    document.getElementById('nextBtn'),
+  hint:    document.getElementById('hintBtn'),
+  reset:   document.getElementById('resetBtn'),
+  fb:      document.getElementById('feedback'),
+  prog:    document.getElementById('progBar'),
+};
+let state = { i: 0, points: 0, attempts: 0, finished: false, playing: false };
+
+function nearlyEqual(a,b){ const tol = Math.max(0.1, Math.abs(b)*0.02); return Math.abs(a-b) <= tol; }
+function fmt(x){ return (Math.round(x*100)/100).toString().replace('.', ','); }
+function lockTabs(lock){ if(!tabsEl) return; tabsEl.style.opacity = lock ? '0.30' : '1'; tabsEl.style.pointerEvents = lock ? 'none' : 'auto'; }
+function updateProgress(){ gameEls.prog.style.width = `${(state.i)/ (levels.length-1) * 100}%`; }
+
+function loadLevel(){
+  const L = levels[state.i];
+  setScene(L.scene);
+  gameEls.lvNum.textContent = (state.i+1);
+  gameEls.score.textContent = `Puntos: ${state.points}`;
+  gameEls.ans.value = '';
+  gameEls.ans.disabled = false;
+  gameEls.check.disabled = false;
+  gameEls.next.disabled = true;
+  gameEls.fb.className = 'feedback';
+  gameEls.fb.textContent = '';
+  updateProgress();
+  gameEls.q.textContent = `Nivel ${state.i+1} – ${L.label}: si la pesa es de ${L.weight} kg, ¿cuánta fuerza (en kg) debes aplicar?`;
+}
+
+function expected(){ const L = levels[state.i]; return L.weight / L.ma; }
+
+function celebrate(){
+  const area = document.getElementById('confetti');
+  area.innerHTML = '';
+  const colors = ['#60a5fa','#34d399','#f472b6','#f59e0b','#a78bfa'];
+  for(let i=0;i<140;i++){
+    const el=document.createElement('i');
+    const s = 6 + Math.random()*8;
+    el.style.width = s+'px'; el.style.height = (s*1.2)+'px';
+    el.style.left = (Math.random()*100)+'%';
+    el.style.background = colors[Math.floor(Math.random()*colors.length)];
+    el.style.animationDelay = (Math.random()*0.6)+'s';
+    area.appendChild(el);
+  }
+}
+
+function checkAnswer(){
+  const raw = gameEls.ans.value.trim().replace(',', '.');
+  const val = parseFloat(raw);
+  if (isNaN(val)){
+    gameEls.fb.className = 'feedback err';
+    gameEls.fb.textContent = 'Escribe un número (puede tener decimales).';
+    return;
+  }
+  const exp = expected();
+  if (nearlyEqual(val, exp)){
+    state.points += Math.max(1, 3 - state.attempts);
+    gameEls.fb.className = 'feedback ok';
+    const L = levels[state.i];
+    gameEls.fb.textContent = `¡Correcto! ${L.formula} ⇒ F = ${fmt(exp)} kg.`;
+    gameEls.ans.disabled = true; gameEls.check.disabled = true; gameEls.next.disabled = false;
+    gameEls.score.textContent = `Puntos: ${state.points}`;
+    state.attempts = 0;
+  }else{
+    state.attempts++;
+    gameEls.fb.className = 'feedback err';
+    gameEls.fb.textContent = 'Aun no... Revisa la ventaja mecánica y vuelve a intentar.';
+  }
+}
+
+function nextLevel(){
+  if (state.i < levels.length - 1){
+    state.i++; loadLevel();
+  } else {
+    state.finished = true; lockTabs(false);
+    document.getElementById('finalScore').textContent = `Puntuación final: ${state.points} puntos.`;
+    document.getElementById('winModal').classList.add('show');
+    celebrate();
+    //Boton LD
+    LD_SHOULD_ENABLE = true;
+    applyLdBtnState();
+  }
+  
+
+}
+
+function showHint(){
+  const L = levels[state.i];
+  const msg = (L.ma===1) ? 'F = R (no hay ventaja mecánica).' :
+              (L.ma===2) ? 'F = R/2 (una polea móvil ⇒ dos tramos soportan R).' :
+                           'F = R/4 (dos poleas móviles ⇒ 4 tramos sostienen R).';
+  gameEls.fb.className = 'feedback';
+  gameEls.fb.textContent = msg;
+}
+function resetGame(){
+  state = { i: 0, points: 0, attempts: 0, finished: false, playing: true };
+  lockTabs(true); loadLevel();
+  LD_SHOULD_ENABLE = false;
+  applyLdBtnState();
+
+}
+gameEls.check.addEventListener('click', checkAnswer);
+gameEls.next .addEventListener('click', nextLevel);
+gameEls.hint .addEventListener('click', showHint);
+gameEls.reset.addEventListener('click', resetGame);
+gameEls.ans.addEventListener('keydown', (e)=>{ if(e.key==='Enter') checkAnswer(); });
+
+/* ===== Modales: inicio / victoria ===== */
+const intro = document.getElementById('introModal');
+const startBtn = document.getElementById('startBtn');
+const seeDemoBtn = document.getElementById('seeDemoBtn'); // puede no existir
+
+startBtn.addEventListener('click', ()=>{
+  intro.classList.remove('show');
+  state.playing = true;
+  lockTabs(true);
+  resetGame();
+});
+
+// Solo conecta “Ver demo” si el botón existe
+if (seeDemoBtn) {
+  seeDemoBtn.addEventListener('click', ()=>{
+    intro.classList.remove('show');
+    state.playing = false;
+    lockTabs(false);
+    gameEls.q.textContent = 'Modo demo: usa las pestañas para ver las animaciones.';
+    gameEls.ans.disabled = true; gameEls.check.disabled = true; gameEls.next.disabled = true;
+    gameEls.fb.textContent = 'Cuando quieras, pulsa “Reiniciar” para jugar.';
+  });
+}
+
+// ====== VICTORIA ======
+const winModal = document.getElementById('winModal');
+const playAgainBtn = document.getElementById('playAgainBtn');
+const closeWinBtn  = document.getElementById('closeWinBtn'); // puede no existir
+
+playAgainBtn.addEventListener('click', ()=>{
+  // Cierra modal y limpia confetti
+  winModal.classList.remove('show');
+  const area = document.getElementById('confetti');
+  if (area) area.innerHTML = '';
+
+  // Reinicia juego
+  state.finished = false;
+  resetGame();
+});
+
+// Conecta “Cerrar” solo si existe
+if (closeWinBtn) {
+  closeWinBtn.addEventListener('click', ()=>{
+    winModal.classList.remove('show');
+  });
+}
+/* ===== LearnDash: controlar botón “Marcar como completado” ===== */
+let LD_SHOULD_ENABLE = false; // estado deseado: false=deshabilitado hasta ganar
+
+function getLdButtons(){
+  return Array.from(document.querySelectorAll('.learndash_mark_complete_button'));
+}
+
+function applyLdBtnState(){
+  const btns = getLdButtons();
+  if (!btns.length) return;
+
+  btns.forEach(btn=>{
+    // Guarda estado/etiqueta original una sola vez
+    if (!btn.dataset.ldInit){
+      btn.dataset.ldInit = '1';
+      btn.dataset.ldOriginalLabel = (('value' in btn) ? btn.value : (btn.textContent || '')).trim();
+      btn.dataset.ldOriginallyDisabled = btn.disabled ? '1' : '0';
+    }
+
+    if (!LD_SHOULD_ENABLE){
+      // Deshabilitar hasta ganar
+      btn.disabled = true;
+      btn.setAttribute('aria-disabled','true');
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '.5';
+      if ('value' in btn) btn.value = 'Completa para avanzar.';
+      else btn.textContent = 'Completa para avanzar.';
+    } else {
+      // Rehabilitar (a menos que ya estuviera deshabilitado por LearnDash por otros requisitos)
+      if (btn.dataset.ldOriginallyDisabled !== '1'){
+        btn.disabled = false;
+        btn.removeAttribute('aria-disabled');
+        btn.style.pointerEvents = '';
+        btn.style.opacity = '';
+      }
+      // Etiqueta final (la que quieres)
+      if ('value' in btn) btn.value = 'Marcar como completado';
+      else btn.textContent = 'Marcar como completado';
+    }
+  });
+}
+
+// Por si LearnDash re-renderiza el botón, se vuelve a aplicar el estado deseado
+new MutationObserver(applyLdBtnState).observe(document.body, { childList:true, subtree:true });
+
+</script>
+</body>
+</html>
