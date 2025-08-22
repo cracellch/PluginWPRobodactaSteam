@@ -68,13 +68,14 @@
   /* Confetti */
   .confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden}
   .confetti i{position:absolute;width:10px;height:14px;opacity:.9;border-radius:2px;animation:fall 2.8s linear forwards}
-  @keyframes fall{
-    0%{transform:translateY(-20vh) rotate(0deg)}
-    100%{transform:translateY(110vh) rotate(720deg)}
-  }
-  .topbar{
-      display: none;
-  }
+  @keyframes fall{ 0%{transform:translateY(-20vh) rotate(0)} 100%{transform:translateY(110vh) rotate(720deg)} }
+  .topbar{ display:none; }
+
+  /* <<< Modal de aprendizaje (slideshow) */
+  .learn-frame{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#f8fafc;aspect-ratio:16/9;margin:8px 0 10px}
+  .learn-frame img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .8s ease}
+  .learn-frame img.show{opacity:1}
+  .muted{opacity:.7}
 </style>
 </head>
 <body>
@@ -213,14 +214,68 @@
     <h2>Bienvenid@ al juego de <span style="color:#1d4ed8">Poleas</span> 🧠</h2>
     <p>Aprende y demuestra cuánto sabes sobre <strong>ventaja mecánica</strong> levantando cargas con sistemas de poleas.</p>
     <ul class="list">
-      <li><b>Nivel 1 – Polea fija:</b> F = R (sin ventaja mecánica).</li>
-      <li><b>Nivel 2 – Móvil:</b> F = R / 2 (dos tramos de cuerda sostienen la carga).</li>
-      <li><b>Nivel 3 – Compuesta (2 móviles):</b> F = R / 4.</li>
-      <li>Responde si <b>R</b> es la masa de la pesa, obten el valor de <b>F</b> que es la fuerza empleada en <b>Kg</b> Se aceptan decimales y redondeos pequeños.</li>
+      <li>Obten el valor de <b>F</b> que es la fuerza empleada en <b>Kg</b>. Si R representa la carga o pesa. Se aceptan decimales y redondeos pequeños.</li>
     </ul>
     <div class="center" style="gap:10px">
-      <button id="startBtn" class="btn primary">Iniciar juego</button>
+      <!-- <<< nuevo botón para abrir el modal didáctico -->
+      <button id="learnBtn" class="btn">Conoce la polea simple</button>
+      <!-- mantenemos el botón de inicio original pero oculto -->
+      <button id="startBtn" class="btn primary" style="display:none">Iniciar juego</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Aprendizaje / Polea Simple (slideshow + audio) ===== -->
+<div id="learnModal" class="modal">
+  <div class="card">
+    <h2>Conoce la <span style="color:#1d4ed8">Polea Simple</span></h2>
+    <div class="learn-frame" id="learnFrame">
+      <img class="slide show" src="https://robodacta-steam.mx/wp-content/uploads/2025/08/KAYa1B.png" alt="Tutor Kaya - Introducción">
+      <img class="slide" src="https://robodacta-steam.mx/wp-content/uploads/2025/08/polea_simple.jpg" alt="Polea simple">
+      <img class="slide" src="https://robodacta-steam.mx/wp-content/uploads/2025/08/KayaFormulaPoleaSimple.png" alt="Fórmula polea simple">
+    </div>
+    <p id="learnHint" class="muted">Escucha a Kaya mientras ves las imágenes</p>
+    <div class="center" style="gap:10px">
+      <button id="startAfterLearnBtn" class="btn primary" style="display:none">Iniciar juego</button>
+    </div>
+    <!-- audio sin controles; se inicia al abrir este modal -->
+    <audio id="learnAudio" preload="auto" src="https://robodacta-steam.mx/wp-content/uploads/2025/08/KayaPoleaSimple.mp3"></audio>
+  </div>
+</div>
+
+<!-- ===== MODAL: Aprendizaje / Polea MÓVIL (slideshow + audio) ===== -->
+<div id="learnModal2" class="modal">
+  <div class="card">
+    <h2>Conoce la <span style="color:#1d4ed8">Polea Móvil</span></h2>
+    <div class="learn-frame" id="learnFrame2">
+      <img class="slide show" src="https://robodacta-steam.mx/wp-content/uploads/2025/08/KAYa1B.png"              alt="Tutor Kaya - Introducción">
+      <img class="slide"      src="https://robodacta-steam.mx/wp-content/uploads/2025/08/PoleaMovil-1.png"         alt="Polea móvil">
+      <img class="slide"      src="https://robodacta-steam.mx/wp-content/uploads/2025/08/PoleaMovilFormula.png"    alt="Fórmula polea móvil">
+    </div>
+    <p class="muted">Escucha a Kaya mientras ves las imágenes</p>
+    <div class="center" style="gap:10px">
+      <button id="startAfterLearnBtn2" class="btn primary" style="display:none">Continuar</button>
+    </div>
+    <!-- audio sin controles; se inicia al abrir este modal -->
+    <audio id="learnAudio2" preload="auto" src="https://robodacta-steam.mx/wp-content/uploads/2025/08/KayaPoleaMovil.mp3"></audio>
+  </div>
+</div>
+
+<!-- ===== MODAL: Aprendizaje / Polea COMPUESTA (slideshow + audio) ===== -->
+<div id="learnModal3" class="modal">
+  <div class="card">
+    <h2>Conoce la <span style="color:#1d4ed8">Polea Compuesta</span></h2>
+    <div class="learn-frame" id="learnFrame3">
+      <img class="slide show" src="https://robodacta-steam.mx/wp-content/uploads/2025/08/KAYa1B.png"               alt="Tutor Kaya - Introducción">
+      <img class="slide"      src="https://robodacta-steam.mx/wp-content/uploads/2025/08/PoleaCompuesta.png"       alt="Polea compuesta">
+      <img class="slide"      src="https://robodacta-steam.mx/wp-content/uploads/2025/08/PoleaCompuestaFormula.png" alt="Fórmula polea compuesta">
+    </div>
+    <p class="muted">Escucha a Kaya mientras ves las imágenes</p>
+    <div class="center" style="gap:10px">
+      <button id="startAfterLearnBtn3" class="btn primary" style="display:none">Continuar</button>
+    </div>
+    <audio id="learnAudio3" preload="auto" playsinline
+           src="https://robodacta-steam.mx/wp-content/uploads/2025/08/KayaPoleaCompuesta.mp3"></audio>
   </div>
 </div>
 
@@ -231,7 +286,7 @@
     <h2>¡Ganaste! 🏆</h2>
     <p id="finalScore" style="font-weight:800;color:#065f46;margin:.5rem 0 1rem"></p>
     <div class="center" style="gap:10px">
-      <button id="playAgainBtn" class="btn primary">Jugar de nuevo</button>
+      <button id="playAgainBtn" class="btn primary" display="none">Jugar de nuevo</button>
     </div>
   </div>
 </div>
@@ -364,7 +419,7 @@ function drawCompound(t0){
   if (!(T2_out.y < CfixL.y && T3_in.y > CmovR.y && T3_in.x < CmovR.x)) {
     T2_out = kinMid.A1; T3_in  = kinMid.A2;
   }
-  const flagsFixL = arcFlagsForHalf(CfixL, T2_in, T2_out, 'top', ); /* (igual que tu código) */
+  const flagsFixL = arcFlagsForHalf(CfixL, T2_in, T2_out, 'top', );
 
   const kin2 = innerTangentEqualR(CmovR, CfixR, r);
   let T3_out = kin2.B1, T4_in = kin2.B2;
@@ -484,6 +539,10 @@ function checkAnswer(){
     gameEls.fb.className = 'feedback ok';
     const L = levels[state.i];
     gameEls.fb.textContent = `¡Correcto! ${L.formula} ⇒ F = ${fmt(exp)} kg.`;
+
+    // >>> SONIDO DE ACIERTO
+    playSfxOK();
+
     gameEls.ans.disabled = true; gameEls.check.disabled = true; gameEls.next.disabled = false;
     gameEls.score.textContent = `Puntos: ${state.points}`;
     state.attempts = 0;
@@ -496,18 +555,26 @@ function checkAnswer(){
 
 function nextLevel(){
   if (state.i < levels.length - 1){
-    state.i++; loadLevel();
+    state.i++;
+    if (state.i === 1){
+      openLearn2();       // modal del nivel 2 (móvil)
+    } else if (state.i === 2){
+      openLearn3();       // modal del nivel 3 (compuesta)
+    } else {
+      loadLevel();
+    }
   } else {
     state.finished = true; lockTabs(false);
     document.getElementById('finalScore').textContent = `Puntuación final: ${state.points} puntos.`;
     document.getElementById('winModal').classList.add('show');
+
+    // >>> SONIDO DE VICTORIA
+    playWinJingle();
+
     celebrate();
-    //Boton LD
     LD_SHOULD_ENABLE = true;
     applyLdBtnState();
   }
-  
-
 }
 
 function showHint(){
@@ -519,41 +586,203 @@ function showHint(){
   gameEls.fb.textContent = msg;
 }
 function resetGame(){
-  state = { i: 0, points: 0, attempts: 0, finished: false, playing: true };
-  lockTabs(true); loadLevel();
+  // Para audios y slides en curso
+  [learnAudio, learnAudio2, learnAudio3].forEach(a=>{
+    if(a){ try{ a.pause(); a.currentTime = 0; }catch(e){} }
+  });
+  clearSlides();
+
+  // Cierra modales de juego (ganaste)
+  winModal.classList.remove('show');
+
+  // Estado base (sin jugar aún)
+  state = { i: 0, points: 0, attempts: 0, finished: false, playing: false };
   LD_SHOULD_ENABLE = false;
   applyLdBtnState();
 
+  // Abre directamente el primer modal didáctico (Polea Simple)
+  openLearn();
 }
+
 gameEls.check.addEventListener('click', checkAnswer);
 gameEls.next .addEventListener('click', nextLevel);
 gameEls.hint .addEventListener('click', showHint);
 gameEls.reset.addEventListener('click', resetGame);
 gameEls.ans.addEventListener('keydown', (e)=>{ if(e.key==='Enter') checkAnswer(); });
 
-/* ===== Modales: inicio / victoria ===== */
+/* ===== Modales: inicio / aprendizaje / victoria ===== */
 const intro = document.getElementById('introModal');
-const startBtn = document.getElementById('startBtn');
-const seeDemoBtn = document.getElementById('seeDemoBtn'); // puede no existir
+const startBtn = document.getElementById('startBtn'); // oculto, mantenido por compatibilidad
+const learnBtn = document.getElementById('learnBtn'); // <<< nuevo
+const learnModal = document.getElementById('learnModal'); // <<< nuevo
+const learnAudio = document.getElementById('learnAudio'); // <<< nuevo
+const startAfterLearnBtn = document.getElementById('startAfterLearnBtn'); // <<< nuevo
+const learnModal2 = document.getElementById('learnModal2');
+const learnAudio2 = document.getElementById('learnAudio2');
+const startAfterLearnBtn2 = document.getElementById('startAfterLearnBtn2');
+const learnModal3 = document.getElementById('learnModal3');
+const learnAudio3 = document.getElementById('learnAudio3');
+const startAfterLearnBtn3 = document.getElementById('startAfterLearnBtn3');
 
-startBtn.addEventListener('click', ()=>{
+
+function startGame(){
+  // Cierra todos los modales didácticos e inicio
   intro.classList.remove('show');
-  state.playing = true;
+  learnModal.classList.remove('show');
+  learnModal2.classList.remove('show');
+  learnModal3.classList.remove('show');
+
+  // Estado inicial y carga de nivel 1
+  state = { i: 0, points: 0, attempts: 0, finished: false, playing: true };
   lockTabs(true);
-  resetGame();
+  loadLevel();
+}
+
+// Por si alguien logra ver el startBtn original
+if (startBtn) startBtn.addEventListener('click', startGame);
+
+// Abrir modal didáctico y reproducir audio + slideshow
+let slideTimer = null;
+function startSlideshowIn(containerSelector, delay = 5000){
+  if (slideTimer){ clearInterval(slideTimer); slideTimer = null; }
+  const slides = Array.from(document.querySelectorAll(`${containerSelector} .slide`));
+  if (!slides.length) return 0;
+  slides.forEach((im,i)=> im.classList.toggle('show', i===0));
+  let idx = 0;
+  slideTimer = setInterval(()=>{
+    idx++;
+    if (idx >= slides.length){ clearInterval(slideTimer); slideTimer = null; return; }
+    slides.forEach((im,i)=> im.classList.toggle('show', i===idx));
+  }, delay);
+  return slides.length * delay; // duración total (para fallback)
+}
+// --- helpers para slideshows con tiempos personalizados ---
+let slideTO = null;
+function clearSlides(){
+  if (slideTimer){ clearInterval(slideTimer); slideTimer = null; }
+  if (slideTO){ clearTimeout(slideTO); slideTO = null; }
+}
+
+/** Slideshow con duraciones por slide (ms por cada imagen).
+ *  containerSelector: '#learnFrame2' o '#learnFrame3'
+ *  durations: array de milisegundos, ej. [4000, 8000, 3000]
+ *  Retorna la duración total (ms) para usar como fallback del botón.
+ */
+function startSlideshowCustom(containerSelector, durations){
+  clearSlides();
+  const slides = Array.from(document.querySelectorAll(`${containerSelector} .slide`));
+  if (!slides.length) return 0;
+
+  // muestra la primera
+  slides.forEach((im,i)=> im.classList.toggle('show', i===0));
+
+  // asegura longitudes
+  const times = (durations && durations.length) ? durations.slice(0, slides.length) 
+                                                : Array(slides.length).fill(5000);
+  const totalMs = times.reduce((a,b)=>a+b,0);
+
+  let idx = 0;
+  function advance(){
+    idx++;
+    if (idx >= slides.length){ slideTO = null; return; }
+    slides.forEach((im,i)=> im.classList.toggle('show', i===idx));
+    slideTO = setTimeout(advance, times[Math.min(idx, times.length-1)]);
+  }
+  slideTO = setTimeout(advance, times[0]);
+  return totalMs;
+}
+
+function openLearn(){
+  learnModal.classList.add('show');
+  startAfterLearnBtn.style.display = 'none';
+
+  const totalMs = startSlideshowIn('#learnFrame', 5000);
+
+  let fallbackShown = false;
+  const showStart = ()=>{ if (!fallbackShown){ startAfterLearnBtn.style.display='inline-block'; fallbackShown = true; } };
+
+  if (learnAudio){
+    learnAudio.currentTime = 0;
+    const p = learnAudio.play();
+    if (p && typeof p.then === 'function'){
+      p.then(()=>{}).catch(()=>{ setTimeout(showStart, totalMs); });
+    } else {
+      setTimeout(showStart, totalMs);
+    }
+    learnAudio.onended = showStart;
+  } else {
+    setTimeout(showStart, totalMs);
+  }
+}
+learnBtn.addEventListener('click', openLearn);
+
+//Openlearn nivel 2
+function openLearn2(){
+  learnModal2.classList.add('show');
+  startAfterLearnBtn2.style.display = 'none';
+
+  // 1ª: un poco menos; 2ª: más tiempo; 3ª: menos tiempo
+  const totalMs = startSlideshowCustom('#learnFrame2', [4000, 8000, 3000]);
+
+  let fallbackShown = false;
+  const showStart = ()=>{ if (!fallbackShown){ startAfterLearnBtn2.style.display='inline-block'; fallbackShown = true; } };
+
+  if (learnAudio2){
+    learnAudio2.currentTime = 0;
+    const p = learnAudio2.play();
+    if (p && typeof p.then === 'function'){
+      p.then(()=>{}).catch(()=>{ setTimeout(showStart, totalMs); });
+    } else {
+      setTimeout(showStart, totalMs);
+    }
+    learnAudio2.onended = showStart;
+  } else {
+    setTimeout(showStart, totalMs);
+  }
+}
+
+
+function openLearn3(){
+  learnModal3.classList.add('show');
+  startAfterLearnBtn3.style.display = 'none';
+
+  // mismas proporciones que el nivel 2
+  const totalMs = startSlideshowCustom('#learnFrame3', [4000, 9000, 2000]);
+
+  let fallbackShown = false;
+  const showStart = ()=>{ if (!fallbackShown){ startAfterLearnBtn3.style.display='inline-block'; fallbackShown = true; } };
+
+  if (learnAudio3){
+    learnAudio3.currentTime = 0;
+    const p = learnAudio3.play();
+    if (p && typeof p.then === 'function'){
+      p.then(()=>{}).catch(()=>{ setTimeout(showStart, totalMs); });
+    } else {
+      setTimeout(showStart, totalMs);
+    }
+    learnAudio3.onended = showStart;
+  } else {
+    setTimeout(showStart, totalMs);
+  }
+}
+
+startAfterLearnBtn2.addEventListener('click', ()=>{
+  if (learnAudio2 && !learnAudio2.paused) learnAudio2.pause();
+  learnModal2.classList.remove('show');
+  loadLevel();
 });
 
-// Solo conecta “Ver demo” si el botón existe
-if (seeDemoBtn) {
-  seeDemoBtn.addEventListener('click', ()=>{
-    intro.classList.remove('show');
-    state.playing = false;
-    lockTabs(false);
-    gameEls.q.textContent = 'Modo demo: usa las pestañas para ver las animaciones.';
-    gameEls.ans.disabled = true; gameEls.check.disabled = true; gameEls.next.disabled = true;
-    gameEls.fb.textContent = 'Cuando quieras, pulsa “Reiniciar” para jugar.';
-  });
-}
+startAfterLearnBtn3.addEventListener('click', ()=>{
+  if (learnAudio3 && !learnAudio3.paused) learnAudio3.pause();
+  learnModal3.classList.remove('show');
+  loadLevel();
+});
+
+// Botón de iniciar tras audio
+startAfterLearnBtn.addEventListener('click', ()=>{
+  if (learnAudio && !learnAudio.paused) learnAudio.pause();
+  startGame();
+});
 
 // ====== VICTORIA ======
 const winModal = document.getElementById('winModal');
@@ -577,27 +806,22 @@ if (closeWinBtn) {
     winModal.classList.remove('show');
   });
 }
+
 /* ===== LearnDash: controlar botón “Marcar como completado” ===== */
 let LD_SHOULD_ENABLE = false; // estado deseado: false=deshabilitado hasta ganar
-
 function getLdButtons(){
   return Array.from(document.querySelectorAll('.learndash_mark_complete_button'));
 }
-
 function applyLdBtnState(){
   const btns = getLdButtons();
   if (!btns.length) return;
-
   btns.forEach(btn=>{
-    // Guarda estado/etiqueta original una sola vez
     if (!btn.dataset.ldInit){
       btn.dataset.ldInit = '1';
       btn.dataset.ldOriginalLabel = (('value' in btn) ? btn.value : (btn.textContent || '')).trim();
       btn.dataset.ldOriginallyDisabled = btn.disabled ? '1' : '0';
     }
-
     if (!LD_SHOULD_ENABLE){
-      // Deshabilitar hasta ganar
       btn.disabled = true;
       btn.setAttribute('aria-disabled','true');
       btn.style.pointerEvents = 'none';
@@ -605,22 +829,66 @@ function applyLdBtnState(){
       if ('value' in btn) btn.value = 'Completa para avanzar.';
       else btn.textContent = 'Completa para avanzar.';
     } else {
-      // Rehabilitar (a menos que ya estuviera deshabilitado por LearnDash por otros requisitos)
       if (btn.dataset.ldOriginallyDisabled !== '1'){
         btn.disabled = false;
         btn.removeAttribute('aria-disabled');
         btn.style.pointerEvents = '';
         btn.style.opacity = '';
       }
-      // Etiqueta final (la que quieres)
       if ('value' in btn) btn.value = 'Marcar como completado';
       else btn.textContent = 'Marcar como completado';
     }
   });
 }
-
-// Por si LearnDash re-renderiza el botón, se vuelve a aplicar el estado deseado
 new MutationObserver(applyLdBtnState).observe(document.body, { childList:true, subtree:true });
+
+//Mini motor de Audio 
+/* ===== SFX (sonidos) ===== */
+let audioCtx;
+function ensureAudio(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if(audioCtx.state === 'suspended'){
+    audioCtx.resume();
+  }
+}
+// Desbloqueo preventivo en el 1er toque
+window.addEventListener('pointerdown', ensureAudio, { once:true });
+
+function tone(freq, dur=0.12, type='sine', gain=0.06, when=0){
+  ensureAudio();
+  const now = audioCtx.currentTime + when;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, now);
+
+  // Envolvente rápida para evitar clicks
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+  osc.connect(g).connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now + dur + 0.05);
+}
+
+// Bip corto para respuesta correcta
+function playSfxOK(){
+  tone(880, 0.09, 'sine', 0.06, 0);
+  tone(1175, 0.10, 'sine', 0.05, 0.07); // pequeño “subidón”
+}
+
+// Jingle más largo para la victoria
+function playWinJingle(){
+  // Arpegio C-E-G-C6-G6 y cierre
+  const base = 523.25; // C5
+  const semis = [0, 4, 7, 12, 19];
+  let t = 0;
+  semis.forEach(s => { tone(base * Math.pow(2, s/12), 0.18, 'triangle', 0.07, t); t += 0.16; });
+  tone(base * Math.pow(2, 12/12), 0.6, 'sawtooth', 0.05, t); // nota final más larga
+}
 
 </script>
 </body>
