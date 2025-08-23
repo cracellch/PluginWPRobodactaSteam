@@ -56,8 +56,15 @@
   }
 
   /* Modales */
-  .modal{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
-  .modal.show{display:flex}
+  /* Reemplaza esta regla */
+  .modal{
+    position:fixed; inset:0;
+    background:rgba(15,23,42,.5);
+    display:none; align-items:center; justify-content:center;
+    padding:16px;
+    z-index: 999999;      /* ← deja este y quita el otro z-index */
+  }
+  .modal.show{ display:flex; pointer-events:auto; }
   .card{max-width:680px;background:#fff;border-radius:16px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(15,23,42,.2);padding:18px 18px 16px}
   .card h2{margin:0 0 6px;font-size:22px}
   .card p{color:var(--muted);margin:6px 0}
@@ -76,6 +83,17 @@
   .learn-frame img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .8s ease}
   .learn-frame img.show{opacity:1}
   .muted{opacity:.7}
+  /* Modal de victoria: deja pasar los clics por el fondo */
+  #winModal { 
+    pointer-events: none;              /* el fondo NO captura clics */
+    background: transparent !important;
+  }
+  /* …pero la tarjeta sí debe ser interactiva */
+  #winModal .card { 
+    pointer-events: auto; 
+  }
+
+
 </style>
 </head>
 <body>
@@ -199,7 +217,7 @@
     <div class="controls">
       <input id="answer" class="inp" placeholder="Tu respuesta en kg" inputmode="decimal">
       <button id="checkBtn" class="btn primary">Comprobar</button>
-      <button id="nextBtn"  class="btn" disabled>Siguiente nivel</button>
+      <button id="nextBtn" class="btn" style="display:none">Siguiente nivel</button> <!-- oculto -->
       <button id="hintBtn"  class="btn">Pista</button>
       <button id="resetBtn" class="btn">Reiniciar</button>
     </div>
@@ -218,7 +236,7 @@
     </ul>
     <div class="center" style="gap:10px">
       <!-- <<< nuevo botón para abrir el modal didáctico -->
-      <button id="learnBtn" class="btn">Conoce la polea simple</button>
+      <button id="learnBtn" class="btn" type="button">Conoce la polea simple</button>
       <!-- mantenemos el botón de inicio original pero oculto -->
       <button id="startBtn" class="btn primary" style="display:none">Iniciar juego</button>
     </div>
@@ -236,6 +254,7 @@
     </div>
     <p id="learnHint" class="muted">Escucha a Kaya mientras ves las imágenes</p>
     <div class="center" style="gap:10px">
+      <button id="repeatLearnBtn" class="btn">Repetir explicación</button>
       <button id="startAfterLearnBtn" class="btn primary" style="display:none">Iniciar juego</button>
     </div>
     <!-- audio sin controles; se inicia al abrir este modal -->
@@ -254,6 +273,7 @@
     </div>
     <p class="muted">Escucha a Kaya mientras ves las imágenes</p>
     <div class="center" style="gap:10px">
+      <button id="repeatLearnBtn2" class="btn">Repetir explicación</button>
       <button id="startAfterLearnBtn2" class="btn primary" style="display:none">Continuar</button>
     </div>
     <!-- audio sin controles; se inicia al abrir este modal -->
@@ -272,6 +292,7 @@
     </div>
     <p class="muted">Escucha a Kaya mientras ves las imágenes</p>
     <div class="center" style="gap:10px">
+      <button id="repeatLearnBtn3" class="btn">Repetir explicación</button>
       <button id="startAfterLearnBtn3" class="btn primary" style="display:none">Continuar</button>
     </div>
     <audio id="learnAudio3" preload="auto" playsinline
@@ -284,9 +305,20 @@
   <div class="card" style="position:relative">
     <div class="confetti" id="confetti"></div>
     <h2>¡Ganaste! 🏆</h2>
+    <h3>¡¡¡Ahora puedes marcar la leccion como completada!!!</h3>
     <p id="finalScore" style="font-weight:800;color:#065f46;margin:.5rem 0 1rem"></p>
     <div class="center" style="gap:10px">
-      <button id="playAgainBtn" class="btn primary" display="none">Jugar de nuevo</button>
+      <button id="playAgainBtn" class="btn primary">Jugar de nuevo</button>
+    </div>
+  </div>
+</div>
+<!-- ===== MODAL: Correcto ===== -->
+<div id="okModal" class="modal">
+  <div class="card" role="dialog" aria-live="polite">
+    <h2 style="margin-bottom:8px">¡Correcto! ✅</h2>
+    <p id="okMsg" class="muted" style="margin:.25rem 0 .75rem"></p>
+    <div class="center" style="gap:10px">
+      <button id="okNextBtn" class="btn primary">Siguiente nivel</button>
     </div>
   </div>
 </div>
@@ -419,7 +451,7 @@ function drawCompound(t0){
   if (!(T2_out.y < CfixL.y && T3_in.y > CmovR.y && T3_in.x < CmovR.x)) {
     T2_out = kinMid.A1; T3_in  = kinMid.A2;
   }
-  const flagsFixL = arcFlagsForHalf(CfixL, T2_in, T2_out, 'top', );
+  const flagsFixL = arcFlagsForHalf(CfixL, T2_in, T2_out, 'top', true);
 
   const kin2 = innerTangentEqualR(CmovR, CfixR, r);
   let T3_out = kin2.B1, T4_in = kin2.B2;
@@ -448,11 +480,16 @@ function drawCompound(t0){
 let active='compound';
 let t0=performance.now();
 function loop(){
-  if(active==='fixed'    && !sceneFixed.classList.contains('hidden'))    drawFixed(t0);
-  if(active==='mobile'   && !sceneMobile.classList.contains('hidden'))   drawMobile(t0);
-  if(active==='compound' && !sceneCompound.classList.contains('hidden')) drawCompound(t0);
+  try{
+    if(active==='fixed'    && !sceneFixed.classList.contains('hidden'))    drawFixed(t0);
+    if(active==='mobile'   && !sceneMobile.classList.contains('hidden'))   drawMobile(t0);
+    if(active==='compound' && !sceneCompound.classList.contains('hidden')) drawCompound(t0);
+  }catch(e){
+    console.error('[Animación]', e);
+  }
   requestAnimationFrame(loop);
 }
+
 function setScene(name){
   active=name; t0=performance.now();
   btnFixed.setAttribute('aria-pressed', name==='fixed');
@@ -465,7 +502,7 @@ function setScene(name){
 btnFixed.addEventListener('click', ()=>setScene('fixed'));
 btnMobile.addEventListener('click', ()=>setScene('mobile'));
 btnCompound.addEventListener('click', ()=>setScene('compound'));
-setScene('compound'); loop();
+
 
 /* ===================== MODO JUEGO (UI + lógica) ===================== */
 const tabsEl = document.querySelector('.topbar');
@@ -487,6 +524,15 @@ const gameEls = {
   prog:    document.getElementById('progBar'),
 };
 let state = { i: 0, points: 0, attempts: 0, finished: false, playing: false };
+let checkMode = 'check'; // 'check' | 'next'
+function labelForNext(){
+  return (state.i === levels.length - 1) ? 'Finalizar' : 'Siguiente nivel';
+}
+function resetCheckBtn(){
+  checkMode = 'check';
+  gameEls.check.textContent = 'Comprobar';
+  gameEls.check.disabled = false;
+}
 
 function nearlyEqual(a,b){ const tol = Math.max(0.1, Math.abs(b)*0.02); return Math.abs(a-b) <= tol; }
 function fmt(x){ return (Math.round(x*100)/100).toString().replace('.', ','); }
@@ -500,13 +546,15 @@ function loadLevel(){
   gameEls.score.textContent = `Puntos: ${state.points}`;
   gameEls.ans.value = '';
   gameEls.ans.disabled = false;
-  gameEls.check.disabled = false;
-  gameEls.next.disabled = true;
+
+  resetCheckBtn(); // <<< importante
+
   gameEls.fb.className = 'feedback';
   gameEls.fb.textContent = '';
   updateProgress();
   gameEls.q.textContent = `Nivel ${state.i+1} – ${L.label}: si la pesa es de ${L.weight} kg, ¿cuánta fuerza (en kg) debes aplicar?`;
 }
+
 
 function expected(){ const L = levels[state.i]; return L.weight / L.ma; }
 
@@ -540,13 +588,25 @@ function checkAnswer(){
     const L = levels[state.i];
     gameEls.fb.textContent = `¡Correcto! ${L.formula} ⇒ F = ${fmt(exp)} kg.`;
 
-    // >>> SONIDO DE ACIERTO
+    // Sonido de acierto
     playSfxOK();
 
-    gameEls.ans.disabled = true; gameEls.check.disabled = true; gameEls.next.disabled = false;
+    // Deshabilita input y cambia el botón principal a "Siguiente nivel/Finalizar"
+    gameEls.ans.disabled = true;
+    checkMode = 'next';
+    gameEls.check.textContent = labelForNext();
+    gameEls.check.disabled = false;
+
+    // Mini-modal "Correcto"
+    okMsg.textContent = `${L.formula} ⇒ F = ${fmt(exp)} kg.`;
+    okNextBtn.textContent = labelForNext(); // ← dinámico: “Siguiente nivel” / “Finalizar”
+    okModal.classList.add('show');
+    setTimeout(()=>{ try{ okNextBtn.focus(); }catch(e){} }, 50);
+
     gameEls.score.textContent = `Puntos: ${state.points}`;
     state.attempts = 0;
-  }else{
+  } else {
+    // ... (deja tu rama de error igual)
     state.attempts++;
     gameEls.fb.className = 'feedback err';
     gameEls.fb.textContent = 'Aun no... Revisa la ventaja mecánica y vuelve a intentar.';
@@ -597,15 +657,22 @@ function resetGame(){
 
   // Estado base (sin jugar aún)
   state = { i: 0, points: 0, attempts: 0, finished: false, playing: false };
+  resetCheckBtn();
   LD_SHOULD_ENABLE = false;
   applyLdBtnState();
-
   // Abre directamente el primer modal didáctico (Polea Simple)
   openLearn();
 }
 
-gameEls.check.addEventListener('click', checkAnswer);
-gameEls.next .addEventListener('click', nextLevel);
+gameEls.check.addEventListener('click', ()=>{
+  if (checkMode === 'check') {
+    checkAnswer();
+  } else {
+    // si el modal "Correcto" está abierto, ciérralo y avanza
+    okModal.classList.remove('show');
+    nextLevel();
+  }
+});
 gameEls.hint .addEventListener('click', showHint);
 gameEls.reset.addEventListener('click', resetGame);
 gameEls.ans.addEventListener('keydown', (e)=>{ if(e.key==='Enter') checkAnswer(); });
@@ -624,19 +691,33 @@ const learnModal3 = document.getElementById('learnModal3');
 const learnAudio3 = document.getElementById('learnAudio3');
 const startAfterLearnBtn3 = document.getElementById('startAfterLearnBtn3');
 
+const repeatLearnBtn  = document.getElementById('repeatLearnBtn');
+const repeatLearnBtn2 = document.getElementById('repeatLearnBtn2');
+const repeatLearnBtn3 = document.getElementById('repeatLearnBtn3');
+
+const okModal   = document.getElementById('okModal');
+const okMsg     = document.getElementById('okMsg');
+const okNextBtn = document.getElementById('okNextBtn');
+
+okNextBtn.addEventListener('click', ()=>{
+  okModal.classList.remove('show');
+  nextLevel();
+});
 
 function startGame(){
   // Cierra todos los modales didácticos e inicio
-  intro.classList.remove('show');
-  learnModal.classList.remove('show');
-  learnModal2.classList.remove('show');
-  learnModal3.classList.remove('show');
+  if (intro){      intro.classList.remove('show');      intro.style.display = 'none'; }
+  if (learnModal){ learnModal.classList.remove('show'); learnModal.style.display = 'none'; }
+  if (learnModal2){learnModal2.classList.remove('show');learnModal2.style.display = 'none';}
+  if (learnModal3){learnModal3.classList.remove('show');learnModal3.style.display = 'none';}
 
   // Estado inicial y carga de nivel 1
   state = { i: 0, points: 0, attempts: 0, finished: false, playing: true };
+  resetCheckBtn();
   lockTabs(true);
   loadLevel();
 }
+
 
 // Por si alguien logra ver el startBtn original
 if (startBtn) startBtn.addEventListener('click', startGame);
@@ -692,36 +773,64 @@ function startSlideshowCustom(containerSelector, durations){
   return totalMs;
 }
 
-function openLearn(){
-  learnModal.classList.add('show');
-  startAfterLearnBtn.style.display = 'none';
 
-  const totalMs = startSlideshowIn('#learnFrame', 5000);
+// ⬇️ sustituye la definición actual
+window.openLearn = function openLearn(){
+  try{
+    if (typeof intro !== 'undefined' && intro) intro.classList.remove('show');
+    if (typeof learnModal !== 'undefined' && learnModal){
+      learnModal.classList.add('show');
+      // por si algún CSS externo pisa display:
+      learnModal.style.display = 'flex';
+    }
 
-  let fallbackShown = false;
-  const showStart = ()=>{ if (!fallbackShown){ startAfterLearnBtn.style.display='inline-block'; fallbackShown = true; } };
+    if (typeof startAfterLearnBtn !== 'undefined' && startAfterLearnBtn)
+      startAfterLearnBtn.style.display = 'none';
 
-  if (learnAudio){
-    learnAudio.currentTime = 0;
-    const p = learnAudio.play();
-    if (p && typeof p.then === 'function'){
-      p.then(()=>{}).catch(()=>{ setTimeout(showStart, totalMs); });
+    const totalMs = startSlideshowIn('#learnFrame', 5000);
+
+    let fallbackShown = false;
+    const showStart = ()=>{ 
+      if (!fallbackShown && startAfterLearnBtn){ 
+        startAfterLearnBtn.style.display='inline-block'; 
+        fallbackShown = true; 
+      } 
+    };
+
+    if (typeof learnAudio !== 'undefined' && learnAudio){
+      learnAudio.currentTime = 0;
+      const p = learnAudio.play();
+      if (p && typeof p.then === 'function'){ p.catch(()=>{ setTimeout(showStart, totalMs); }); }
+      else { setTimeout(showStart, totalMs); }
+      learnAudio.onended = showStart;
     } else {
       setTimeout(showStart, totalMs);
     }
-    learnAudio.onended = showStart;
-  } else {
-    setTimeout(showStart, totalMs);
+  }catch(err){
+    console.error('openLearn error', err);
+    if (typeof learnModal !== 'undefined' && learnModal){
+      learnModal.classList.add('show');
+      learnModal.style.display = 'flex';
+    }
   }
+};
+if (learnBtn) {
+  learnBtn.addEventListener('click', () => window.openLearn());
 }
-learnBtn.addEventListener('click', openLearn);
+
+// Delegación por si el theme re-renderiza el botón
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('#learnBtn');
+  if (btn){ e.preventDefault(); window.openLearn(); }
+});
+
 
 //Openlearn nivel 2
 function openLearn2(){
   learnModal2.classList.add('show');
+  learnModal2.style.display = 'flex';   // ← agrega esto
   startAfterLearnBtn2.style.display = 'none';
 
-  // 1ª: un poco menos; 2ª: más tiempo; 3ª: menos tiempo
   const totalMs = startSlideshowCustom('#learnFrame2', [4000, 8000, 3000]);
 
   let fallbackShown = false;
@@ -741,12 +850,11 @@ function openLearn2(){
   }
 }
 
-
 function openLearn3(){
   learnModal3.classList.add('show');
+  learnModal3.style.display = 'flex';   // ← agrega esto
   startAfterLearnBtn3.style.display = 'none';
 
-  // mismas proporciones que el nivel 2
   const totalMs = startSlideshowCustom('#learnFrame3', [4000, 9000, 2000]);
 
   let fallbackShown = false;
@@ -766,17 +874,66 @@ function openLearn3(){
   }
 }
 
+function repeatLearnBase({frameSel, audioEl, startBtnEl, durations=null, defaultDelay=5000}){
+  clearSlides();
+  // Oculta el botón de continuar hasta que termine o pase el fallback
+  startBtnEl.style.display = 'none';
+
+  // Reinicia slides
+  let totalMs = 0;
+  if (durations){
+    totalMs = startSlideshowCustom(frameSel, durations);
+  } else {
+    totalMs = startSlideshowIn(frameSel, defaultDelay);
+  }
+
+  // Reinicia audio
+  if (audioEl){
+    try { audioEl.pause(); audioEl.currentTime = 0; } catch(e){}
+    const p = audioEl.play();
+    const showStart = ()=>{ startBtnEl.style.display='inline-block'; };
+    if (p && typeof p.then==='function'){
+      p.then(()=>{}).catch(()=>{ setTimeout(showStart, totalMs); });
+    }else{
+      setTimeout(showStart, totalMs);
+    }
+    audioEl.onended = showStart;
+  } else {
+    setTimeout(()=>{ startBtnEl.style.display='inline-block'; }, totalMs);
+  }
+}
+
+// Listeners de "Repetir explicación"
+if (repeatLearnBtn){
+  repeatLearnBtn.addEventListener('click', ()=>{
+    repeatLearnBase({ frameSel:'#learnFrame', audioEl:learnAudio, startBtnEl:startAfterLearnBtn, durations:null, defaultDelay:5000 });
+  });
+}
+if (repeatLearnBtn2){
+  repeatLearnBtn2.addEventListener('click', ()=>{
+    repeatLearnBase({ frameSel:'#learnFrame2', audioEl:learnAudio2, startBtnEl:startAfterLearnBtn2, durations:[4000,8000,3000] });
+  });
+}
+if (repeatLearnBtn3){
+  repeatLearnBtn3.addEventListener('click', ()=>{
+    repeatLearnBase({ frameSel:'#learnFrame3', audioEl:learnAudio3, startBtnEl:startAfterLearnBtn3, durations:[4000,9000,2000] });
+  });
+}
+
 startAfterLearnBtn2.addEventListener('click', ()=>{
   if (learnAudio2 && !learnAudio2.paused) learnAudio2.pause();
   learnModal2.classList.remove('show');
+  learnModal2.style.display = 'none'; 
   loadLevel();
 });
 
 startAfterLearnBtn3.addEventListener('click', ()=>{
   if (learnAudio3 && !learnAudio3.paused) learnAudio3.pause();
   learnModal3.classList.remove('show');
+  learnModal3.style.display = 'none';  
   loadLevel();
 });
+
 
 // Botón de iniciar tras audio
 startAfterLearnBtn.addEventListener('click', ()=>{
@@ -889,7 +1046,34 @@ function playWinJingle(){
   semis.forEach(s => { tone(base * Math.pow(2, s/12), 0.18, 'triangle', 0.07, t); t += 0.16; });
   tone(base * Math.pow(2, 12/12), 0.6, 'sawtooth', 0.05, t); // nota final más larga
 }
+if (learnBtn) {
+  // Resuelve window.openLearn en el momento del click (evita ReferenceError si un minificador lo mueve)
+  learnBtn.addEventListener('click', () => window.openLearn());
+}
 
+// Delegación global (por si el botón es re-renderizado por el theme/Learndash)
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('#learnBtn');
+  if (btn){ e.preventDefault(); window.openLearn(); }
+});
+// --- HOTFIX: solo enruta el click al window.openLearn sin redefinirlo
+(function(){
+  function callOpenLearn(e){
+    if (e) e.preventDefault();
+    if (typeof window.openLearn === 'function') window.openLearn();
+  }
+  const btn = document.getElementById('learnBtn');
+  if (btn){
+    btn.type = 'button';
+    btn.onclick = callOpenLearn; // asignación directa
+  }
+  document.addEventListener('click', function(e){
+    const b = e.target && e.target.closest && e.target.closest('#learnBtn');
+    if (b) callOpenLearn(e);
+  });
+})();
+
+setScene('compound'); loop();
 </script>
 </body>
 </html>
